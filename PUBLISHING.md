@@ -37,7 +37,7 @@ git commit -m "Initial release v1.0.0"
 
 ```bash
 git branch -M main
-git remote add origin https://github.com/YOUR_USERNAME/locomm.git
+git remote add origin https://github.com/dev-j33zy/locomm.git
 git push -u origin main
 ```
 
