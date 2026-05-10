@@ -1,5 +1,7 @@
 <img width="1920" height="962" alt="1 - Setup Screen" src="https://github.com/user-attachments/assets/d41111cb-92a8-40d4-80bc-49342a6ec8a6" />
+
 <img width="1920" height="962" alt="2 - User Screen" src="https://github.com/user-attachments/assets/d39dd26a-3bee-4d19-8fca-fcdab4f1544d" />
+
 <img width="1920" height="963" alt="3 - Master Screen" src="https://github.com/user-attachments/assets/9eb48abe-1b64-4d06-ae12-f2afa9ecaeba" />
 
 # LoComm — Local Voice Communication
