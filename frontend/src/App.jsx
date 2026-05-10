@@ -3,7 +3,7 @@ import { io } from 'socket.io-client';
 import { createClient } from '@supabase/supabase-js';
 import { Mic, MicOff, Sun, Maximize, Minimize, Settings2, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 
-const SOCKET_SERVER_URL = '/';
+
 
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
 const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || '';
@@ -28,6 +28,7 @@ export default function App() {
   const [role, setRole] = useState(() => localStorage.getItem('locomm_role') || 'regular'); // 'regular' or 'master'
   const [password, setPassword] = useState(() => localStorage.getItem('locomm_password') || '');
   const [showConfig, setShowConfig] = useState(true);
+  const [serverUrl, setServerUrl] = useState(() => localStorage.getItem('locomm_serverUrl') || '/');
   
   // Dynamic Network State
   const [channels, setChannels] = useState([]);
@@ -100,7 +101,8 @@ export default function App() {
     localStorage.setItem('locomm_password', password);
     localStorage.setItem('locomm_pttMode', pttMode);
     localStorage.setItem('locomm_targetUsers', JSON.stringify(targetUsers));
-  }, [username, role, channel, masterTargets, selectedInput, selectedOutput, pttKey, password, pttMode, targetUsers]);
+    localStorage.setItem('locomm_serverUrl', serverUrl);
+  }, [username, role, channel, masterTargets, selectedInput, selectedOutput, pttKey, password, pttMode, targetUsers, serverUrl]);
 
   // Keep a ref to the latest playAudioChunk so the socket listener never goes stale
   const playAudioChunkRef = useRef(null);
@@ -134,7 +136,9 @@ export default function App() {
 
   // Connect socket
   useEffect(() => {
-    const newSocket = io(SOCKET_SERVER_URL, {
+    if (!serverUrl) return;
+
+    const newSocket = io(serverUrl, {
       secure: true,
       rejectUnauthorized: false,
       transports: ['websocket']
@@ -186,7 +190,7 @@ export default function App() {
     return () => {
       newSocket.close();
     };
-  }, []);
+  }, [serverUrl]);
 
 
 
@@ -573,6 +577,18 @@ export default function App() {
         <div className="glass-panel" style={{ overflowY: 'auto' }}>
           <h2 className="mb-4">Setup Configuration</h2>
           <div className="controls-grid">
+            <div className="form-group" style={{ gridColumn: '1 / -1' }}>
+              <label>Server URL / IP</label>
+              <input 
+                type="text" 
+                value={serverUrl} 
+                onChange={e => setServerUrl(e.target.value)}
+                onFocus={() => setIsTyping(true)}
+                onBlur={() => setIsTyping(false)}
+                placeholder="e.g. https://192.168.1.10:3001 or /"
+              />
+            </div>
+
             <div className="form-group" style={{ gridColumn: '1 / -1' }}>
               <label>Username</label>
               <input 
