@@ -105,6 +105,46 @@ export default function App() {
 
   const [activeTalkers, setActiveTalkers] = useState({}); // { [username]: timeoutID }
 
+  // Handle Companion API calls from Backend without stale state
+  const companionActionRef = useRef();
+  useEffect(() => {
+    companionActionRef.current = ({ action, target }) => {
+      if (role !== 'master') return;
+
+      console.log('Received Companion Action:', action, target);
+
+      switch (action) {
+        case 'ptt-down':
+          startRecording(false);
+          break;
+        case 'ptt-up':
+          stopRecording();
+          break;
+        case 'ptt-toggle':
+          isPressing ? stopRecording() : startRecording(false);
+          break;
+        case 'clear-targets':
+          setMasterTargets(['all']);
+          setTargetUsers([]);
+          break;
+        case 'toggle-target':
+          if (!target) return;
+          if (target === 'all') {
+            toggleTarget('all');
+          } else if (channels.find(c => c.id === target)) {
+            toggleTarget(target);
+          } else {
+            const user = onlineUsers.find(u => u.username === target || u.id === target);
+            if (user) toggleTargetUser(user.id);
+            else console.warn('Companion toggle-target: User not found:', target);
+          }
+          break;
+        default:
+          break;
+      }
+    };
+  });
+
   // Check for updates via Supabase
   async function checkForUpdates() {
     try {
@@ -179,6 +219,10 @@ export default function App() {
 
     newSocket.on('sync-users', (users) => {
       setOnlineUsers(users);
+    });
+
+    newSocket.on('companion-action', (payload) => {
+      companionActionRef.current?.(payload);
     });
 
     return () => {

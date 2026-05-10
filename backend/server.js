@@ -98,6 +98,19 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6 // Reduced from 100MB to 1MB to prevent large payload DoS
 });
 
+// Companion API endpoint for StreamDeck controls
+app.get('/api/companion', (req, res) => {
+  const { action, target } = req.query;
+  if (!action) {
+    return res.status(400).json({ error: 'Action parameter is required' });
+  }
+  
+  // Forward the command to all connected Master (Director) clients
+  io.to('master').emit('companion-action', { action, target });
+  
+  res.json({ success: true, message: `Action ${action} dispatched` });
+});
+
 // Dynamic global channel state
 let channels = [
   { id: 'red', name: 'Red Team', color: '#ef4444' },
