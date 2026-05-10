@@ -107,6 +107,31 @@ export default function App() {
 
   const [activeTalkers, setActiveTalkers] = useState({}); // { [username]: timeoutID }
 
+  // Check for updates via Supabase
+  async function checkForUpdates() {
+    try {
+      const { data, error } = await supabase
+        .from('updates')
+        .select('version, download_url, release_notes')
+        .eq('app_name', 'locomm')
+        .eq('platform', 'web')
+        .order('version', { ascending: false })
+        .limit(1)
+        .single();
+      
+      if (error) {
+        console.error('Update check error:', error.message);
+        return;
+      }
+      
+      if (data && data.version !== CURRENT_VERSION) {
+        setUpdateInfo(data);
+      }
+    } catch (err) {
+      console.error('Update check failed:', err);
+    }
+  };
+
   // Connect socket
   useEffect(() => {
     const newSocket = io(SOCKET_SERVER_URL, {
@@ -150,7 +175,7 @@ export default function App() {
       
       // Check for updates from Supabase
       if (supabase && version) {
-        checkForUpdates(version);
+        checkForUpdates();
       }
     });
 
@@ -163,30 +188,7 @@ export default function App() {
     };
   }, []);
 
-  // Check for updates via Supabase
-  const checkForUpdates = async (serverVersion) => {
-    try {
-      const { data, error } = await supabase
-        .from('updates')
-        .select('version, download_url, release_notes')
-        .eq('app_name', 'locomm')
-        .eq('platform', 'web')
-        .order('version', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (error) {
-        console.error('Update check error:', error.message);
-        return;
-      }
-      
-      if (data && data.version !== CURRENT_VERSION) {
-        setUpdateInfo(data);
-      }
-    } catch (err) {
-      console.error('Update check failed:', err);
-    }
-  };
+
 
   const handleJoinNetwork = () => {
     if (!socket || !connected) return alert("System disconnected. Please wait.");

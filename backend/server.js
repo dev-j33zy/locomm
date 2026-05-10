@@ -95,7 +95,7 @@ const io = new Server(server, {
   pingTimeout: 60000,
   pingInterval: 25000,
   transports: ['websocket'],
-  maxHttpBufferSize: 1e8
+  maxHttpBufferSize: 1e6 // Reduced from 100MB to 1MB to prevent large payload DoS
 });
 
 // Dynamic global channel state
