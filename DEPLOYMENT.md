@@ -1,100 +1,115 @@
-# LoComm Deployment Guide
+# LoComm — Deployment Guide
 
-## Prerequisites
+## Requirements
 
-- Node.js 18+ installed
-- Network access to all devices (same LAN)
-- Web browser with WebRTC support
-- Microphone and speakers
-
-## Deployment Options
-
-### Option 1: Single Server Deployment (Recommended)
-
-This is the simplest deployment for LAN use.
-
-#### Step 1: Prepare Server Machine
-
-1. Install Node.js from https://nodejs.org/
-2. Create a folder for LoComm
-
-#### Step 2: Deploy Files
-
-Copy the following structure to server:
-
-```
-LoComm/
-├── backend/
-│   ├── server.js
-│   ├── key.pem (auto-generated)
-│   ├── cert.pem (auto-generated)
-│   └── package.json
-└── frontend/
-    └── dist/ (pre-built)
-```
-
-#### Step 3: Start Server
-
-```bash
-cd backend
-npm install
-npm start
-```
-
-Server will output:
-```
-🔒 SSL enabled.
-🔌 TribeTalk Server running on https://0.0.0.0:3001
-📱 Access from devices: https://YOUR_LOCAL_IP:3001
-```
-
-#### Step 4: Client Access
-
-All devices access: `https://SERVER_IP:3001`
+- **Node.js** v18 or higher
+- **npm** v9 or higher
+- A machine on the same LAN as all users
+- Web browser with WebRTC + WebSocket support (Chrome, Edge, Firefox, Safari)
+- Microphone and speakers/headset
 
 ---
 
-### Option 2: Development Deployment
+## Option 1: LAN Server Deployment (Recommended)
 
-For making changes to the application.
+This is the standard, recommended deployment for all production and live event use.
 
-#### Backend Development
+### Step 1: Clone or Copy the Project
 
+```bash
+git clone https://github.com/dev-j33zy/locomm.git
+cd locomm
+```
+
+### Step 2: Install Dependencies
+
+```bash
+# Install backend dependencies
+cd backend
+npm install
+
+# Install frontend dependencies
+cd ../frontend
+npm install
+```
+
+### Step 3: Build the Frontend
+
+```bash
+cd frontend
+npm run build
+```
+
+This creates `frontend/dist/` — the production static files served by the backend.
+
+### Step 4: Start the Backend
+
+```bash
+cd ../backend
+node server.js
+```
+
+Expected output:
+```
+🔒 Self-signed SSL certificates generated (with SAN).
+🔒 SSL enabled.
+🔌 TribeTalk Server running on https://0.0.0.0:3001
+📱 Access from devices: https://192.168.x.x:3001
+```
+
+### Step 5: Access on All Devices
+
+Open this URL on any LAN device:
+```
+https://192.168.x.x:3001
+```
+
+> **Important:** Each device must accept the self-signed SSL certificate warning once. In Chrome, click **Advanced → Proceed to 192.168.x.x (unsafe)**.
+
+---
+
+## Option 2: Development Mode
+
+For active frontend development with hot reload.
+
+### Terminal 1 — Backend
 ```bash
 cd backend
 npm install
-npm run dev
+node server.js
 ```
 
-#### Frontend Development
-
+### Terminal 2 — Frontend Dev Server
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
 
-Development server runs on http://localhost:5173
+Frontend dev server runs at `https://localhost:5173` and proxies WebSocket traffic to the backend on port 3001.
 
 ---
 
-### Option 3: Custom Port Deployment
+## Option 3: Run with Auto-Restart (Production)
 
-To run on a different port:
+Install `nodemon` or `pm2` for production resilience:
 
-1. Edit `backend/server.js`
-2. Change `const PORT = 3001;` to desired port
-3. Rebuild frontend to match (optional)
+```bash
+# Using pm2
+npm install -g pm2
+cd backend
+pm2 start server.js --name locomm
+pm2 save
+pm2 startup
+```
 
 ---
 
-## Network Configuration
+## Firewall Configuration
 
-### Firewall Setup
+Allow inbound TCP on port `3001`:
 
-Allow inbound connections on port 3001:
-
-**Windows (PowerShell as Admin):**
+**Windows (PowerShell — run as Administrator):**
 ```powershell
 New-NetFirewallRule -DisplayName "LoComm" -Direction Inbound -Action Allow -LocalPort 3001 -Protocol TCP
 ```
@@ -104,97 +119,113 @@ New-NetFirewallRule -DisplayName "LoComm" -Direction Inbound -Action Allow -Loca
 sudo ufw allow 3001/tcp
 ```
 
-### Static IP (Recommended)
+---
 
-Set a static IP for the server machine:
+## Static IP Setup (Strongly Recommended)
 
-**Windows:** Control Panel > Network and Sharing Center > Change adapter settings > Right-click > Properties > IPv4
+Assign a static IP to the server machine so the URL never changes.
 
-**Router:** Access router admin panel and reserve DHCP lease
+**Windows:**
+`Control Panel → Network & Sharing Center → Change adapter settings → Right-click adapter → Properties → IPv4`
 
-### DNS (Optional)
+**Router DHCP Reservation:**
+Log into your router admin panel and reserve a fixed IP for the server's MAC address.
 
-For easier access, set up a local DNS entry:
+**Example hostname shortcut (Windows hosts file):**
+```
+192.168.1.10   locomm.local
+```
+Then access: `https://locomm.local:3001`
+
+---
+
+## SSL Certificates
+
+SSL certificates are **auto-generated on first server start** using the `selfsigned` package.
+
+- Saved to `backend/key.pem` and `backend/cert.pem`
+- Valid for 365 days
+- Includes SAN entries for `localhost`, `127.0.0.1`, and the detected LAN IP
+
+**Bring your own certificate (optional):**
+Place your own `key.pem` and `cert.pem` files in the `backend/` folder before starting the server.
+
+---
+
+## BitFocus Companion REST API
+
+The backend exposes a REST endpoint for StreamDeck control via BitFocus Companion:
 
 ```
-locomm.local -> SERVER_IP
+GET http://SERVER_IP:3001/api/companion?action=<action>&target=<target>
 ```
+
+| Parameter | Description |
+|-----------|-------------|
+| `action` | `ptt-down`, `ptt-up`, `ptt-toggle`, `toggle-target`, `clear-targets` |
+| `target` | Channel ID (`red`, `blue`) or username (`John`) — used with `toggle-target` |
+
+> No authentication required on LAN. Actions are routed only to connected Master (Director) clients.
 
 ---
 
 ## Production Checklist
 
-### Pre-Deployment
+### Before Going Live
+- [ ] Server machine has a static IP
+- [ ] Firewall allows port 3001
+- [ ] Frontend has been built (`npm run build`)
+- [ ] Backend dependencies installed (`npm install`)
+- [ ] SSL certs exist or are auto-generated on first run
 
-- [ ] Server machine has static IP
-- [ ] Firewall configured
-- [ ] Frontend built (`npm run build`)
-- [ ] Dependencies installed (`npm install`)
-- [ ] SSL certificates generated (auto-generated on first run)
+### Network
+- [ ] All client devices are on the same LAN
+- [ ] No port forwarding to the internet (LAN-only)
+- [ ] 5GHz WiFi or wired ethernet on server machine
 
 ### Security
-
-- [ ] Network PIN set by first Director
-- [ ] Only trusted users on LAN
-- [ ] No port forwarding to internet (keep local-only)
-
-### Performance
-
-- [ ] No more than 20 simultaneous users
-- [ ] Stable WiFi connection (5GHz recommended)
-- [ ] Low network congestion
+- [ ] Network PIN set by the first Director
+- [ ] No unauthorized users on the LAN
 
 ---
 
-## Maintenance
-
-### Backup
-
-Back up these files:
-- `backend/key.pem`
-- `backend/cert.pem`
-
-### Logs
-
-Server outputs to console. To save logs:
+## Updating the App
 
 ```bash
-npm start > locomm.log 2>&1 &
+# 1. Stop the server (Ctrl+C or pm2 stop locomm)
+# 2. Pull latest changes
+git pull origin main
+
+# 3. Rebuild frontend
+cd frontend
+npm install
+npm run build
+
+# 4. Restart backend
+cd ../backend
+npm install
+node server.js
 ```
 
-### Updates
+---
 
-To update the application:
+## Logs
 
-1. Stop server
-2. Replace frontend/dist/ files
-3. Restart server
+To save server output to a log file:
+
+```bash
+node server.js > locomm.log 2>&1 &
+```
 
 ---
 
 ## Troubleshooting
 
-### Connection Issues
-
-| Issue | Solution |
-|-------|----------|
-| Can't reach server | Check firewall, verify IP |
-| Certificate warning | Accept self-signed cert |
-| Slow performance | Check network, reduce users |
-
-### Audio Issues
-
-| Issue | Solution |
-|-------|----------|
-| Audio stuttering | Reduce simultaneous talkers |
-| High latency | Use wired network |
-| No audio | Check microphone permissions |
-
----
-
-## Support
-
-For issues, check:
-1. Console errors (F12 > Console)
-2. Network tab for connection status
-3. Server console for errors
+| Problem | Solution |
+|---------|----------|
+| Can't reach server | Check firewall, verify LAN IP, ensure server is running |
+| SSL certificate warning | Accept it in browser (one time per device) |
+| "Server Offline" in app | Use the LAN IP URL served by the backend, not Vercel |
+| Audio stuttering | Move to stronger WiFi or use wired connection |
+| Companion not working | Ensure Director is logged in; test URL in browser manually |
+| Port already in use | Kill the process using port 3001 or change `PORT` in `server.js` |

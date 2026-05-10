@@ -1,32 +1,80 @@
-# LoComm - Local Voice Communication
+# LoComm — Local Voice Communication
 
-A real-time voice chat application for local networks. Perfect for gaming, teams, and small groups that need low-latency voice communication without internet dependency.
+> A real-time, low-latency Push-to-Talk (PTT) voice communication dashboard for local networks. Designed for production, broadcast, live events, and team operations.
+
+---
 
 ## Features
 
-- **Push-to-Talk (PTT)** voice communication
-- **Channel-based** team groups (Red, Blue, Green)
-- **Master/Director** role for network control
-- **Talkback** feature for private responses to masters
-- **LAN-optimized** for minimal latency
-- **Multi-user support** (up to 20 simultaneous users)
-- **SSL-secured** local communication
-- **Dynamic channel** creation and management
+### Core Communication
+- **Push-to-Talk (PTT)** — Hold or Toggle mode, fully configurable
+- **Channel-based routing** — Broadcast to specific teams (e.g. Red, Blue, Green)
+- **Broadcast to All** — Director sends voice to every connected user
+- **Individual User Targeting** — Send voice directly to a specific user
+- **Talkback** — Regular users can privately respond to Directors
+- **Active Talker Indicator** — Real-time UI shows who is currently speaking
+
+### Roles
+- **Master (Director)** — Full control. Can broadcast to all/channels/users, manage channels, and set the Network PIN. Up to 3 Masters allowed simultaneously.
+- **Regular User** — Joins a channel, uses PTT to communicate within it, can talkback to Directors
+
+### Channel Management (Director Only)
+- Dynamically create and delete channels
+- Assign custom colors per channel
+- Real-time sync to all connected clients
+
+### StreamDeck / BitFocus Companion Integration
+- Full HTTP REST API (`/api/companion`) for external control
+- Supported actions: `ptt-down`, `ptt-up`, `ptt-toggle`, `toggle-target`, `clear-targets`
+- No PIN required for Companion on local LAN
+
+### Network & Security
+- **SSL/TLS encrypted** (self-signed cert auto-generated on first run)
+- **Global Network PIN** — set by the first Director, required for all users to join
+- **Max payload size**: 1MB (protects against DoS)
+- **LAN-only** — no internet dependency, no cloud required
+
+### UI / UX
+- Fullscreen mode
+- Wake Lock (keeps screen on during operation)
+- Hold / Toggle PTT mode selector
+- Custom PTT keyboard key mapping
+- Audio device selection (Input + Output)
+- Settings persist across sessions (localStorage)
+
+### Supabase Update Checker (Optional)
+- Frontend checks for new versions via Supabase
+- Shows an update banner when a newer version is available
+
+---
 
 ## Architecture
 
 ```
 LoComm/
-├── backend/           # Node.js + Express + Socket.IO server
-│   ├── server.js     # Main server (Express + WebSocket)
-│   ├── key.pem      # Auto-generated SSL key
-│   └── cert.pem     # Auto-generated SSL cert
-└── frontend/        # React + Vite web app
-    ├── src/
-    │   ├── App.jsx # Main React component
-    │   └── index.css
-    └── dist/       # Built production files
+├── backend/
+│   ├── server.js          # Express + Socket.IO server with Companion API
+│   ├── package.json
+│   ├── key.pem            # Auto-generated SSL key (gitignored)
+│   └── cert.pem           # Auto-generated SSL cert (gitignored)
+├── frontend/
+│   ├── src/
+│   │   ├── App.jsx        # Main React component (all UI + socket logic)
+│   │   ├── App.css        # Styling
+│   │   └── main.jsx       # React entry point
+│   ├── public/
+│   ├── index.html
+│   ├── vite.config.js
+│   └── package.json
+├── vercel.json            # Vercel deployment config (frontend only)
+├── package.json           # Root package.json (build proxy for Vercel)
+├── .gitignore
+├── README.md
+├── DEPLOYMENT.md
+└── PUBLISHING.md
 ```
+
+---
 
 ## Quick Start
 
@@ -38,117 +86,154 @@ cd backend
 npm install
 
 # Frontend
-cd frontend
+cd ../frontend
 npm install
 ```
 
-### 2. Build Frontend
+### 2. Build the Frontend
 
 ```bash
 cd frontend
 npm run build
 ```
 
-### 3. Start Server
+### 3. Start the Server
 
 ```bash
-cd backend
+cd ../backend
 node server.js
 ```
 
-The server runs on **https://YOUR_LOCAL_IP:3001**
+Server output:
+```
+🔒 Self-signed SSL certificates generated.
+🔒 SSL enabled.
+🔌 TribeTalk Server running on https://0.0.0.0:3001
+📱 Access from devices: https://192.168.x.x:3001
+```
 
-### 4. Access the App
+### 4. Open in Browser
 
-Open in browser: `https://YOUR_LOCAL_IP:3001`
+Go to `https://YOUR_LOCAL_IP:3001` on any device connected to the same LAN.
 
-On mobile devices connected to the same LAN, use the same URL.
+> ⚠️ Accept the self-signed SSL certificate warning in your browser on first visit.
 
-## Network Setup
+---
 
-### For First Use (Creating Network)
+## Setup & Usage
 
-1. Open the app
-2. Select **Master (Director)** role
-3. Enter a **Network PIN** (password) for your network
-4. Click **Join Network**
+### First Launch — Creating a Network
 
-### For Subsequent Users
+1. Open the app in your browser
+2. Set a **Username**
+3. Select **Master (Director)** as your role
+4. Enter a **Network PIN** (this becomes the password for your session)
+5. Select your audio **Input** and **Output** devices
+6. Map your **PTT Key** (press to bind any key)
+7. Click **Join Network**
 
-1. Open the app
-2. Select **Regular User** role
-3. Enter the **Network PIN** provided by the Director
-4. Select a **Channel** (Red/Blue/Green)
-5. Click **Join Network**
+### Joining as a Regular User
 
-## Usage
+1. Open `https://SERVER_IP:3001` in browser
+2. Set a **Username**
+3. Select **Regular User** role
+4. Enter the **Network PIN** provided by the Director
+5. Select your **Channel** (Red Team, Blue Team, etc.)
+6. Select audio devices and PTT key
+7. Click **Join Network**
 
-### Push-to-Talk
+---
 
-- **Hold** the PTT button or key to talk
-- **Release** to stop transmitting
-- Works with keyboard key set in settings
+## Director Controls
 
-### Talkback (Private to Master)
+| Control | Description |
+|---------|-------------|
+| Broadcast to All | Sends voice to every non-Master user |
+| Channel Buttons | Toggle routing to a specific channel |
+| User Tags | Click a username to target that individual |
+| Add Channel | Create a new team channel with a custom color |
+| Remove Channel | Delete a channel (trash icon) |
+| Hold / Toggle Mode | Switch PTT behavior |
 
-- Use the separate Talkback button on regular user view
-- Only the masters will hear your response
+---
 
-### Director Controls
+## BitFocus Companion & StreamDeck
 
-- **Broadcast to All**: Send voice to all regular users
-- **Channel Select**: Send voice to specific team channels
-- **User Select**: Send voice to specific users
-- **Add Channel**: Create new team channels
-- **Remove Channel**: Delete channels
+LoComm includes a REST API endpoint that BitFocus Companion can control via HTTP.
 
-## Configuration
+### Setup in Companion
+Use the **"Generic HTTP"** module with **GET** requests to:
 
-### Audio Settings
+```
+http://YOUR_BACKEND_IP:3001/api/companion?action=<action>&target=<target>
+```
 
-- Input device selection (microphone)
-- Output device selection (speaker)
-- Custom PTT key mapping
+### Available Actions
 
-### Network Settings
+| Button | URL |
+|--------|-----|
+| PTT Down (Key Down) | `?action=ptt-down` |
+| PTT Up (Key Up) | `?action=ptt-up` |
+| PTT Toggle | `?action=ptt-toggle` |
+| Broadcast to All | `?action=toggle-target&target=all` |
+| Red Team Toggle | `?action=toggle-target&target=red` |
+| Blue Team Toggle | `?action=toggle-target&target=blue` |
+| Target User "John" | `?action=toggle-target&target=John` |
+| Clear All Targets | `?action=clear-targets` |
 
-- Network PIN (set by first Director)
-- Channel assignment
+> **Note:** `target` for channels uses the channel ID (e.g. `red`, `blue`). For users, it uses the exact username entered on their setup screen.
 
-## Technical Details
+---
 
-### Audio Processing
+## Audio Configuration
 
-- Sample rate: 48kHz
-- Buffer size: 8192 frames (optimized for LAN)
-- Noise threshold: 0.01 RMS
-- WebSocket transport for real-time delivery
+| Setting | Value |
+|---------|-------|
+| Sample Rate | 48kHz (device native) |
+| Buffer Size | 8192 frames |
+| Noise Gate | 0.01 RMS threshold |
+| Transport | WebSocket (binary) |
+| Max Payload | 1MB |
 
-### Network
-
-- Port: 3001
-- Protocol: HTTPS (self-signed SSL)
-- Max users: 20 simultaneous
+---
 
 ## Troubleshooting
 
 ### Can't connect to server
+- Ensure the backend server is running
+- Check your firewall allows port `3001`
+- Use the server's **LAN IP**, not `localhost`
+- Accept the SSL certificate warning in your browser
 
-1. Ensure server is running
-2. Check firewall allows port 3001
-3. Verify you're on the same LAN
-4. Use correct IP address (not localhost)
+### Server shows "Offline" in the app
+- The app connects to the server that served it — both must come from the same backend
+- Do not open the frontend from Vercel/GitHub Pages and expect it to connect to a local backend
 
 ### Audio stuttering
+- Move to a stronger WiFi signal (5GHz recommended)
+- Reduce simultaneous active talkers
+- Use wired ethernet on the server machine
 
-1. Check network bandwidth
-2. Reduce number of simultaneous talkers
-3. Ensure stable WiFi connection
+### Certificate warning on browser
+- This is expected with self-signed SSL
+- Click "Advanced" → "Proceed anyway" to accept
 
-### Fullscreen not working
+### Companion actions not working
+- Ensure the Director is logged in (Companion actions only fire to Master clients)
+- Verify backend is reachable at `http://IP:3001/api/companion?action=ptt-down`
 
-1. Ensure browser supports Fullscreen API
-2. Check browser permissions
+---
+
+## Environment Variables (Frontend)
+
+Create `frontend/.env.local` for optional Supabase update checking:
+
+```env
+VITE_SUPABASE_URL=https://your-project.supabase.co
+VITE_SUPABASE_KEY=your-anon-public-key
+```
+
+---
 
 ## License
 
