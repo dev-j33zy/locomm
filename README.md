@@ -5,7 +5,7 @@
 <img width="1920" height="963" alt="3 - Master Screen" src="https://github.com/user-attachments/assets/9eb48abe-1b64-4d06-ae12-f2afa9ecaeba" />
 <br>
 
-# LoComm — Local Voice Communication
+# SECTalk — Secure Encrypted Communication
 
 > A real-time, low-latency Push-to-Talk (PTT) voice communication dashboard for local networks. Designed for production, broadcast, live events, and team operations.
 
@@ -49,32 +49,33 @@
 - Audio device selection (Input + Output)
 - Settings persist across sessions (localStorage)
 
-### Supabase Update Checker (Optional)
-- Frontend checks for new versions via Supabase
-- Shows an update banner when a newer version is available
-
 ---
 
 ## Architecture
 
 ```
-LoComm/
+SECTalk/
+├── SECTalk.exe              # Desktop launcher (GUI)
+├── SECTalk-Setup-1.0.0.exe  # Windows installer (self-contained)
+├── launcher.py              # Launcher source code
+├── installer.iss            # Inno Setup installer script
 ├── backend/
-│   ├── server.js          # Express + Socket.IO server with Companion API
+│   ├── server.js            # Express + Socket.IO server with Companion API
 │   ├── package.json
-│   ├── key.pem            # Auto-generated SSL key (gitignored)
-│   └── cert.pem           # Auto-generated SSL cert (gitignored)
+│   ├── node_modules/        # Backend dependencies
+│   ├── key.pem              # Auto-generated SSL key (gitignored)
+│   └── cert.pem             # Auto-generated SSL cert (gitignored)
 ├── frontend/
+│   ├── dist/                # Pre-built production frontend
 │   ├── src/
-│   │   ├── App.jsx        # Main React component (all UI + socket logic)
-│   │   ├── App.css        # Styling
-│   │   └── main.jsx       # React entry point
+│   │   ├── App.jsx          # Main React component (all UI + socket logic)
+│   │   ├── App.css          # Styling
+│   │   └── main.jsx         # React entry point
 │   ├── public/
 │   ├── index.html
 │   ├── vite.config.js
 │   └── package.json
-├── vercel.json            # Vercel deployment config (frontend only)
-├── package.json           # Root package.json (build proxy for Vercel)
+├── package.json             # Root package.json
 ├── .gitignore
 ├── README.md
 ├── DEPLOYMENT.md
@@ -83,7 +84,35 @@ LoComm/
 
 ---
 
-## Quick Start
+## Quick Start (Windows Installer)
+
+The easiest way to run SECTalk — **no development tools required**.
+
+### 1. Run the Installer
+
+Double-click **`SECTalk-Setup-1.0.0.exe`** and follow the wizard. This installs:
+- `SECTalk.exe` — Desktop launcher
+- Portable Node.js runtime (bundled)
+- Backend server + all dependencies
+- Pre-built frontend
+
+### 2. Launch
+
+Open **SECTalk** from the Start Menu or Desktop shortcut.
+
+### 3. Start the Server
+
+Click **▶ START SERVER** — the launcher starts the backend and opens your browser automatically.
+
+### 4. Connect Devices
+
+Open `https://YOUR_LOCAL_IP:3001/sectalk` on any device connected to the same LAN.
+
+> ⚠️ Accept the self-signed SSL certificate warning in your browser on first visit.
+
+---
+
+## Quick Start (Manual / Development)
 
 ### 1. Install Dependencies
 
@@ -115,15 +144,13 @@ Server output:
 ```
 🔒 Self-signed SSL certificates generated.
 🔒 SSL enabled.
-🔌 TribeTalk Server running on https://0.0.0.0:3001
+🔌 SECTalk Server running on https://0.0.0.0:3001
 📱 Access from devices: https://192.168.x.x:3001
 ```
 
 ### 4. Open in Browser
 
-Go to `https://YOUR_LOCAL_IP:3001` on any device connected to the same LAN.
-
-> ⚠️ Accept the self-signed SSL certificate warning in your browser on first visit.
+Go to `https://YOUR_LOCAL_IP:3001/sectalk` on any device connected to the same LAN.
 
 ---
 
@@ -141,7 +168,7 @@ Go to `https://YOUR_LOCAL_IP:3001` on any device connected to the same LAN.
 
 ### Joining as a Regular User
 
-1. Open `https://SERVER_IP:3001` in browser
+1. Open `https://SERVER_IP:3001/sectalk` in browser
 2. Set a **Username**
 3. Select **Regular User** role
 4. Enter the **Network PIN** provided by the Director
@@ -166,7 +193,7 @@ Go to `https://YOUR_LOCAL_IP:3001` on any device connected to the same LAN.
 
 ## BitFocus Companion & StreamDeck
 
-LoComm includes a REST API endpoint that BitFocus Companion can control via HTTP.
+SECTalk includes a REST API endpoint that BitFocus Companion can control via HTTP.
 
 ### Setup in Companion
 Use the **"Generic HTTP"** module with **GET** requests to:
@@ -212,10 +239,6 @@ http://YOUR_BACKEND_IP:3001/api/companion?action=<action>&target=<target>
 - Use the server's **LAN IP**, not `localhost`
 - Accept the SSL certificate warning in your browser
 
-### Server shows "Offline" in the app
-- The app connects to the server that served it — both must come from the same backend
-- Do not open the frontend from Vercel/GitHub Pages and expect it to connect to a local backend
-
 ### Audio stuttering
 - Move to a stronger WiFi signal (5GHz recommended)
 - Reduce simultaneous active talkers
@@ -228,17 +251,6 @@ http://YOUR_BACKEND_IP:3001/api/companion?action=<action>&target=<target>
 ### Companion actions not working
 - Ensure the Director is logged in (Companion actions only fire to Master clients)
 - Verify backend is reachable at `http://IP:3001/api/companion?action=ptt-down`
-
----
-
-## Environment Variables (Frontend)
-
-Create `frontend/.env.local` for optional Supabase update checking:
-
-```env
-VITE_SUPABASE_URL=https://your-project.supabase.co
-VITE_SUPABASE_KEY=your-anon-public-key
-```
 
 ---
 
