@@ -1,5 +1,5 @@
 {
-  "name": "locomm-root",
+  "name": "sectalk-root",
   "private": true,
   "scripts": {
     "install": "cd frontend && npm install",

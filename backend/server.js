@@ -32,7 +32,7 @@ async function getSSLOptions() {
     try {
       const selfsigned = require('selfsigned');
       const pems = await selfsigned.generate(
-        [{ name: 'commonName', value: 'TribeTalk' }],
+        [{ name: 'commonName', value: 'SECTalk' }],
         { 
           days: 365,
           extensions: [{
@@ -65,12 +65,6 @@ const app = express();
 app.use(cors());
 
 const APP_VERSION = '1.0.0';
-const UPDATE_URL = process.env.UPDATE_URL || null;
-
-// Version check endpoint
-app.get('/api/version', (req, res) => {
-  res.json({ version: APP_VERSION, updateUrl: UPDATE_URL });
-});
 
 // Serve the production frontend
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
@@ -272,7 +266,7 @@ io.on('connection', (socket) => {
 const PORT = 3001;
 const PROTOCOL = sslOptions ? 'https' : 'http';
 server.listen(PORT, '0.0.0.0', () => {
-  console.log(`🔌 TribeTalk Server running on ${PROTOCOL}://0.0.0.0:${PORT}`);
+  console.log(`🔌 SECTalk Server running on ${PROTOCOL}://0.0.0.0:${PORT}`);
   console.log(`📱 Access from devices: ${PROTOCOL}://YOUR_LOCAL_IP:${PORT}`);
 });
 } // end startServer

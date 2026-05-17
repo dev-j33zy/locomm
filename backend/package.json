@@ -1,5 +1,5 @@
 {
-  "name": "locomm-backend",
+  "name": "sectalk-backend",
   "version": "1.0.0",
   "main": "server.js",
   "scripts": {
@@ -9,7 +9,7 @@
   "keywords": ["voice-chat", "local-network", "ptt", "real-time"],
   "author": "",
   "license": "ISC",
-  "description": "LoComm - Local Voice Communication Server",
+  "description": "SECTalk - Secure Encrypted Communication Server",
   "dependencies": {
     "cors": "^2.8.6",
     "express": "^5.2.1",

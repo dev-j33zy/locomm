@@ -1,6 +1,5 @@
 {
   "name": "frontend",
-  "homepage": "https://dev-j33zy.github.io/locomm/",
   "private": true,
   "version": "0.0.0",
   "type": "module",
@@ -8,12 +7,9 @@
     "dev": "vite",
     "build": "vite build",
     "lint": "eslint .",
-    "preview": "vite preview",
-    "predeploy": "npm run build",
-    "deploy": "gh-pages -d dist"
+    "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.105.1",
     "lucide-react": "^1.11.0",
     "react": "^19.2.5",
     "react-dom": "^19.2.5",

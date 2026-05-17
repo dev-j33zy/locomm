@@ -1,12 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { io } from 'socket.io-client';
-import { createClient } from '@supabase/supabase-js';
 import { Mic, MicOff, Sun, Maximize, Minimize, Settings2, Plus, Trash2, Eye, EyeOff } from 'lucide-react';
 const SOCKET_SERVER_URL = '/';
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-const supabaseKey = import.meta.env.VITE_SUPABASE_KEY || '';
-const supabase = supabaseUrl && supabaseKey ? createClient(supabaseUrl, supabaseKey) : null;
-const CURRENT_VERSION = '1.0.0';
 
 const getContrastYIQ = (hexcolor) => {
   if (!hexcolor) return 'white';
@@ -22,22 +17,22 @@ export default function App() {
   const socketRef = useRef(null);
   const [socket, setSocket] = useState(null);
   const [connected, setConnected] = useState(false);
-  const [username, setUsername] = useState(() => localStorage.getItem('locomm_username') || 'User' + Math.floor(Math.random() * 1000));
-  const [role, setRole] = useState(() => localStorage.getItem('locomm_role') || 'regular'); // 'regular' or 'master'
-  const [password, setPassword] = useState(() => localStorage.getItem('locomm_password') || '');
+  const [username, setUsername] = useState(() => localStorage.getItem('sectalk_username') || 'User' + Math.floor(Math.random() * 1000));
+  const [role, setRole] = useState(() => localStorage.getItem('sectalk_role') || 'regular'); // 'regular' or 'master'
+  const [password, setPassword] = useState(() => localStorage.getItem('sectalk_password') || '');
   const [showConfig, setShowConfig] = useState(true);
   
   // Dynamic Network State
   const [channels, setChannels] = useState([]);
-  const [channel, setChannel] = useState(() => localStorage.getItem('locomm_channel') || ''); // Regular user selected channel
+  const [channel, setChannel] = useState(() => localStorage.getItem('sectalk_channel') || ''); // Regular user selected channel
   const [masterTargets, setMasterTargets] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('locomm_masterTargets')) || ['all']; } 
+    try { return JSON.parse(localStorage.getItem('sectalk_masterTargets')) || ['all']; } 
     catch { return ['all']; }
   }); // Master broadcast targets (array)
 
   // Track specific user targets for 1-on-1 comms
   const [targetUsers, setTargetUsers] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('locomm_targetUsers')) || []; }
+    try { return JSON.parse(localStorage.getItem('sectalk_targetUsers')) || []; }
     catch { return []; }
   });
   
@@ -54,15 +49,15 @@ export default function App() {
   // Audio configuration
   const [inputs, setInputs] = useState([]);
   const [outputs, setOutputs] = useState([]);
-  const [selectedInput, setSelectedInput] = useState(() => localStorage.getItem('locomm_selectedInput') || '');
-  const [selectedOutput, setSelectedOutput] = useState(() => localStorage.getItem('locomm_selectedOutput') || '');
+  const [selectedInput, setSelectedInput] = useState(() => localStorage.getItem('sectalk_selectedInput') || '');
+  const [selectedOutput, setSelectedOutput] = useState(() => localStorage.getItem('sectalk_selectedOutput') || '');
   
   // PTT State
   const [isTyping, setIsTyping] = useState(false);
-  const [pttKey, setPttKey] = useState(() => localStorage.getItem('locomm_pttKey') || 'Space');
+  const [pttKey, setPttKey] = useState(() => localStorage.getItem('sectalk_pttKey') || 'Space');
   const [isPressing, setIsPressing] = useState(false);
   const [isTalkbackPressing, setIsTalkbackPressing] = useState(false);
-  const [pttMode, setPttMode] = useState(() => localStorage.getItem('locomm_pttMode') || 'hold'); // 'hold' | 'toggle'
+  const [pttMode, setPttMode] = useState(() => localStorage.getItem('sectalk_pttMode') || 'hold'); // 'hold' | 'toggle'
   
   // WakeLock & Fullscreen
   const [wakeLock, setWakeLock] = useState(null);
@@ -71,7 +66,6 @@ export default function App() {
   // Server network info (IP + port emitted by backend)
   const [serverInfo, setServerInfo] = useState({ ip: '', port: 3001, version: '' });
   const [showPin, setShowPin] = useState(false);
-  const [updateInfo, setUpdateInfo] = useState(null);
 
   // Audio Capture Refs
   const audioContextRef = useRef(null);
@@ -88,16 +82,16 @@ export default function App() {
 
   // Save settings to LocalStorage whenever they change
   useEffect(() => {
-    localStorage.setItem('locomm_username', username);
-    localStorage.setItem('locomm_role', role);
-    localStorage.setItem('locomm_channel', channel);
-    localStorage.setItem('locomm_masterTargets', JSON.stringify(masterTargets));
-    localStorage.setItem('locomm_selectedInput', selectedInput);
-    localStorage.setItem('locomm_selectedOutput', selectedOutput);
-    localStorage.setItem('locomm_pttKey', pttKey);
-    localStorage.setItem('locomm_password', password);
-    localStorage.setItem('locomm_pttMode', pttMode);
-    localStorage.setItem('locomm_targetUsers', JSON.stringify(targetUsers));
+    localStorage.setItem('sectalk_username', username);
+    localStorage.setItem('sectalk_role', role);
+    localStorage.setItem('sectalk_channel', channel);
+    localStorage.setItem('sectalk_masterTargets', JSON.stringify(masterTargets));
+    localStorage.setItem('sectalk_selectedInput', selectedInput);
+    localStorage.setItem('sectalk_selectedOutput', selectedOutput);
+    localStorage.setItem('sectalk_pttKey', pttKey);
+    localStorage.setItem('sectalk_password', password);
+    localStorage.setItem('sectalk_pttMode', pttMode);
+    localStorage.setItem('sectalk_targetUsers', JSON.stringify(targetUsers));
   }, [username, role, channel, masterTargets, selectedInput, selectedOutput, pttKey, password, pttMode, targetUsers]);
 
   // Keep a ref to the latest playAudioChunk so the socket listener never goes stale
@@ -145,30 +139,7 @@ export default function App() {
     };
   });
 
-  // Check for updates via Supabase
-  async function checkForUpdates() {
-    try {
-      const { data, error } = await supabase
-        .from('updates')
-        .select('version, download_url, release_notes')
-        .eq('app_name', 'locomm')
-        .eq('platform', 'web')
-        .order('version', { ascending: false })
-        .limit(1)
-        .single();
-      
-      if (error) {
-        console.error('Update check error:', error.message);
-        return;
-      }
-      
-      if (data && data.version !== CURRENT_VERSION) {
-        setUpdateInfo(data);
-      }
-    } catch (err) {
-      console.error('Update check failed:', err);
-    }
-  };
+
 
   // Connect socket
   useEffect(() => {
@@ -210,11 +181,6 @@ export default function App() {
 
     newSocket.on('server-info', ({ ip, port, version }) => {
       setServerInfo({ ip, port, version });
-      
-      // Check for updates from Supabase
-      if (supabase && version) {
-        checkForUpdates();
-      }
     });
 
     newSocket.on('sync-users', (users) => {
@@ -550,7 +516,7 @@ export default function App() {
     <div className="app-container">
       <header className="header glass-panel" style={{flexDirection: 'column', alignItems: 'stretch', gap: '0.75rem'}}>
         <div className="flex-row" style={{justifyContent: 'space-between', width: '100%', flexWrap: 'wrap', gap: '0.5rem'}}>
-          <h1>TribeTalk</h1>
+          <h1>SECTalk</h1>
           <div className="flex-row" style={{flexWrap: 'wrap', gap: '0.4rem', alignItems: 'center', justifyContent: 'flex-end'}}>
             {Object.keys(activeTalkers).length > 0 && Object.keys(activeTalkers).map(talker => (
               <span key={talker} className="active-talker-tag">
@@ -578,37 +544,7 @@ export default function App() {
           )}
         </div>
         
-        {updateInfo && (
-          <div className="update-banner" style={{
-            background: 'var(--accent)',
-            color: 'white',
-            padding: '0.5rem 1rem',
-            borderRadius: '8px',
-            marginBottom: '0.5rem',
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '1rem'
-          }}>
-            <span>Update available: v{updateInfo.version}</span>
-            <div style={{display: 'flex', gap: '0.5rem'}}>
-              <button 
-                className="outline" 
-                style={{borderColor: 'white', color: 'white', padding: '0.25rem 0.75rem'}}
-                onClick={() => window.open(updateInfo.download_url, '_blank')}
-              >
-                Update
-              </button>
-              <button 
-                className="outline" 
-                style={{borderColor: 'white', color: 'white', padding: '0.25rem 0.5rem'}}
-                onClick={() => setUpdateInfo(null)}
-              >
-                X
-              </button>
-            </div>
-          </div>
-        )}
+
       </header>
 
       {showConfig ? (

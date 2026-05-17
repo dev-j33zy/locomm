@@ -2,10 +2,16 @@ node_modules/
 .env
 .env.local
 .env.*.local
-dist/
 build/
-backend/key.pem
-backend/cert.pem
 *.log
 .DS_Store
+backend/key.pem
+backend/cert.pem
 backend/supabase-pass.txt
+
+# PyInstaller temp
+*.spec
+__pycache__/
+
+# Portable Node.js (only used during installer build)
+node/
