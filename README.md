@@ -56,7 +56,7 @@
 ```
 SECTalk/
 ├── SECTalk.exe              # Desktop launcher (GUI)
-├── SECTalk-Setup-1.0.0.exe  # Windows installer (self-contained)
+├── SECTalk-Setup-1.0.1.exe  # Windows installer (self-contained)
 ├── launcher.py              # Launcher source code
 ├── installer.iss            # Inno Setup installer script
 ├── backend/
@@ -90,7 +90,7 @@ The easiest way to run SECTalk — **no development tools required**.
 
 ### 1. Run the Installer
 
-Double-click **`SECTalk-Setup-1.0.0.exe`** and follow the wizard. This installs:
+Double-click **`SECTalk-Setup-1.0.1.exe`** and follow the wizard. This installs:
 - `SECTalk.exe` — Desktop launcher
 - Portable Node.js runtime (bundled)
 - Backend server + all dependencies
@@ -106,7 +106,7 @@ Click **▶ START SERVER** — the launcher starts the backend and opens your br
 
 ### 4. Connect Devices
 
-Open `https://YOUR_LOCAL_IP:3001/sectalk` on any device connected to the same LAN.
+Open `https://YOUR_LOCAL_IP:3001/` on any device connected to the same LAN.
 
 > ⚠️ Accept the self-signed SSL certificate warning in your browser on first visit.
 
@@ -150,7 +150,7 @@ Server output:
 
 ### 4. Open in Browser
 
-Go to `https://YOUR_LOCAL_IP:3001/sectalk` on any device connected to the same LAN.
+Go to `https://YOUR_LOCAL_IP:3001/` on any device connected to the same LAN.
 
 ---
 
@@ -168,7 +168,7 @@ Go to `https://YOUR_LOCAL_IP:3001/sectalk` on any device connected to the same L
 
 ### Joining as a Regular User
 
-1. Open `https://SERVER_IP:3001/sectalk` in browser
+1. Open `https://SERVER_IP:3001/` in browser
 2. Set a **Username**
 3. Select **Regular User** role
 4. Enter the **Network PIN** provided by the Director

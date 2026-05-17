@@ -366,7 +366,7 @@ class SECTalkLauncher(tk.Tk):
             pass
 
     def _open_browser(self, event=None):
-        url = f"https://{self.local_ip}:{self.server_port}/sectalk"
+        url = f"https://{self.local_ip}:{self.server_port}/"
         self._log(f"Opening browser: {url}")
         webbrowser.open(url)
 

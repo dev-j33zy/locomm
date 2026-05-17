@@ -84,7 +84,7 @@ Remove-Item -Recurse -Force "node-temp", "node-portable.zip"
 "C:\Users\USERNAME\AppData\Local\Programs\Inno Setup 6\ISCC.exe" installer.iss
 ```
 
-Output: `SECTalk-Setup-1.0.0.exe`
+Output: `SECTalk-Setup-1.0.1.exe`
 
 ### Step 5: Clean Up
 
@@ -110,7 +110,7 @@ Then on GitHub:
 2. Tag: `v1.0.0`
 3. Title: `v1.0.0 — Initial Release`
 4. Add release notes
-5. Attach `SECTalk-Setup-1.0.0.exe` as a binary asset
+5. Attach `SECTalk-Setup-1.0.1.exe` as a binary asset
 6. Publish
 
 ### 2. Subsequent Releases
