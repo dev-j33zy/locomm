@@ -60,6 +60,8 @@ async function startServer() {
 const sslOptions = await getSSLOptions();
 if (sslOptions) console.log('🔒 SSL enabled.');
 
+const PORT = 3001;
+const PROTOCOL = sslOptions ? 'https' : 'http';
 
 const app = express();
 app.use(cors());
@@ -263,8 +265,6 @@ io.on('connection', (socket) => {
   });
 });
 
-const PORT = 3001;
-const PROTOCOL = sslOptions ? 'https' : 'http';
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🔌 SECTalk Server running on ${PROTOCOL}://0.0.0.0:${PORT}`);
   console.log(`📱 Access from devices: ${PROTOCOL}://YOUR_LOCAL_IP:${PORT}`);

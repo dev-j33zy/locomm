@@ -4,7 +4,7 @@ import basicSsl from '@vitejs/plugin-basic-ssl'
 
 export default defineConfig({
   plugins: [react(), basicSsl()],
-  base: process.env.VITE_BASE_URL || "/sectalk",
+  base: process.env.VITE_BASE_URL || "/",
   server: {
     proxy: {
       '/socket.io': {
