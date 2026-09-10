@@ -88,11 +88,14 @@ class SECTalkLauncher(tk.Tk):
         y = (sh - h) // 2
         self.geometry(f"{w}x{h}+{x}+{y}")
 
-        # Remove default window icon, set taskbar icon
+        # App icon (launcher + taskbar). Falls back to default when not found.
         try:
-            self.iconbitmap(default="")
-        except Exception:
-            pass
+            self.iconbitmap("SECTalk.ico")
+        except tk.TclError:
+            try:
+                self.iconbitmap(default="")
+            except Exception:
+                pass
 
         # Dark title bar on Windows 10/11
         self._apply_dark_titlebar()

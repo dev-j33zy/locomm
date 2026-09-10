@@ -2,7 +2,7 @@
 ; Bundles: SECTalk.exe launcher, Node.js portable, backend + built frontend
 
 #define MyAppName "SECTalk"
-#define MyAppVersion "1.0.3"
+#define MyAppVersion "1.0.4"
 #define MyAppPublisher "SECTalk"
 #define MyAppExeName "SECTalk.exe"
 
@@ -11,9 +11,13 @@ AppId={{B3F1A2D4-7E8C-4F5A-9D6B-1C2E3F4A5B6C}
 AppName={#MyAppName}
 AppVersion={#MyAppVersion}
 AppPublisher={#MyAppPublisher}
+AppPublisherURL=https://github.com/dev-j33zy/locomm
+AppSupportURL=https://github.com/dev-j33zy/locomm/releases
 DefaultDirName={autopf}\{#MyAppName}
 DefaultGroupName={#MyAppName}
 DisableProgramGroupPage=yes
+SetupIconFile=SECTalk.ico
+UninstallDisplayIcon={app}\{#MyAppExeName}
 OutputDir=.
 OutputBaseFilename=SECTalk-Setup-{#MyAppVersion}
 Compression=lzma2/ultra64
@@ -31,6 +35,9 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 [Files]
 ; Launcher executable
 Source: "dist\{#MyAppExeName}"; DestDir: "{app}"; Flags: ignoreversion
+
+; App icon (launcher window + taskbar)
+Source: "SECTalk.ico"; DestDir: "{app}"; Flags: ignoreversion
 
 ; Node.js portable runtime (only node.exe is needed for production)
 Source: "node\node.exe"; DestDir: "{app}\node"; Flags: ignoreversion

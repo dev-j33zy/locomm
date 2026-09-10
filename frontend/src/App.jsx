@@ -42,6 +42,13 @@ export default function App() {
   
   const targetUsersRef = useRef(targetUsers);
   useEffect(() => { targetUsersRef.current = targetUsers; }, [targetUsers]);
+
+  // Join credentials + joined state, so we can rejoin automatically after a reconnect
+  const joinedRef = useRef(false);
+  const joinParamsRef = useRef({ channel, role, username, password });
+  useEffect(() => {
+    joinParamsRef.current = { channel, role, username, password };
+  }, [channel, role, username, password]);
   
   // Track all online users sent by server
   const [onlineUsers, setOnlineUsers] = useState([]);
@@ -152,7 +159,12 @@ export default function App() {
     // eslint-disable-next-line react-hooks/set-state-in-effect
     setSocket(newSocket);
 
-    newSocket.on('connect', () => setConnected(true));
+    newSocket.on('connect', () => {
+      setConnected(true);
+      if (joinedRef.current && socketRef.current) {
+        socketRef.current.emit('join-channel', joinParamsRef.current, () => {});
+      }
+    });
     newSocket.on('disconnect', () => setConnected(false));
     
     newSocket.on('sync-channels', (syncedChannels) => {
@@ -204,6 +216,7 @@ export default function App() {
       if (response && response.error) {
         alert(response.error);
       } else {
+        joinedRef.current = true;
         setShowConfig(false);
       }
     });
@@ -219,8 +232,10 @@ export default function App() {
         const audioOuts = devices.filter(d => d.kind === 'audiooutput');
         setInputs(audioIns);
         setOutputs(audioOuts);
-        if (audioIns.length > 0) setSelectedInput(audioIns[0].deviceId);
-        if (audioOuts.length > 0) setSelectedOutput(audioOuts[0].deviceId);
+        setSelectedInput(prev =>
+          (prev && audioIns.some(i => i.deviceId === prev)) ? prev : (audioIns[0]?.deviceId || ''));
+        setSelectedOutput(prev =>
+          (prev && audioOuts.some(o => o.deviceId === prev)) ? prev : (audioOuts[0]?.deviceId || ''));
       } catch (err) {
         console.error('Error fetching devices', err);
       }
@@ -301,7 +316,7 @@ export default function App() {
       const NOISE_THRESHOLD = 0.01;
       
       processor.onaudioprocess = (e) => {
-        if (!socket) return;
+        if (!socketRef.current) return;
         const inputData = e.inputBuffer.getChannelData(0);
         
         let rms = 0;
@@ -313,7 +328,7 @@ export default function App() {
         if (rms < NOISE_THRESHOLD) return;
         
         const pcmData = new Float32Array(inputData);
-        socket.emit('audio-chunk', { 
+        socketRef.current.emit('audio-chunk', { 
           chunk: pcmData.buffer, 
           sampleRate: audioCtx.sampleRate,
           targetChannels: role === 'master' ? masterTargetsRef.current : undefined,

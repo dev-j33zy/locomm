@@ -66,7 +66,7 @@ const PROTOCOL = sslOptions ? 'https' : 'http';
 const app = express();
 app.use(cors());
 
-const APP_VERSION = '1.0.3';
+const APP_VERSION = '1.0.4';
 
 // Serve the production frontend
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
@@ -94,11 +94,14 @@ const io = new Server(server, {
   maxHttpBufferSize: 1e6 // Reduced from 100MB to 1MB to prevent large payload DoS
 });
 
-// Companion API endpoint for StreamDeck controls
+// Companion API endpoint for StreamDeck controls (requires the Network PIN)
 app.get('/api/companion', (req, res) => {
-  const { action, target } = req.query;
+  const { action, target, pin } = req.query;
   if (!action) {
     return res.status(400).json({ error: 'Action parameter is required' });
+  }
+  if (!GLOBAL_PIN || !pin || pin !== GLOBAL_PIN) {
+    return res.status(401).json({ error: 'Invalid or missing Network PIN' });
   }
   
   // Forward the command to all connected Master (Director) clients
