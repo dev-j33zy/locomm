@@ -7,11 +7,16 @@ dev servers with a single click and opens the browser automatically.
 
 import tkinter as tk
 from tkinter import font as tkfont
+from tkinter import ttk
 import subprocess
 import threading
 import socket
 import os
 import sys
+import re
+import json
+import tempfile
+import urllib.request
 import webbrowser
 import signal
 import ctypes
@@ -61,6 +66,9 @@ SUCCESS      = "#22c55e"
 DANGER       = "#ef4444"
 WARNING      = "#f59e0b"
 
+GITHUB_REPO = "dev-j33zy/locomm"
+UPDATE_CHECK_URL = f"https://api.github.com/repos/{GITHUB_REPO}/releases/latest"
+
 
 # ─── Application ───────────────────────────────────────────────────────────────
 
@@ -94,6 +102,7 @@ class SECTalkLauncher(tk.Tk):
         self.server_running = False
         self.local_ip = get_local_ip()
         self.server_port = "3001"
+        self.update_dialog = None
 
         # Fonts
         self.font_title    = tkfont.Font(family="Segoe UI", size=20, weight="bold")
@@ -106,6 +115,12 @@ class SECTalkLauncher(tk.Tk):
 
         self._build_ui()
         self.protocol("WM_DELETE_WINDOW", self._on_close)
+
+        # Detect installed version (single source of truth: backend/server.js)
+        self.installed_version = self._get_installed_version()
+
+        # Silently check for updates shortly after the window paints
+        self.after(1200, self.check_for_updates)
 
     # ── Dark Title Bar ────────────────────────────────────────────────────────
     def _apply_dark_titlebar(self):
@@ -369,6 +384,220 @@ class SECTalkLauncher(tk.Tk):
         url = f"https://{self.local_ip}:{self.server_port}/"
         self._log(f"Opening browser: {url}")
         webbrowser.open(url)
+
+    # ── Auto-Update ───────────────────────────────────────────────────────────
+
+    def _get_installed_version(self):
+        """Read the installed APP_VERSION from backend/server.js."""
+        try:
+            path = os.path.join(get_project_root(), "backend", "server.js")
+            with open(path, "r", encoding="utf-8", errors="replace") as f:
+                content = f.read()
+            m = re.search(r"APP_VERSION\s*=\s*['\"]([^'\"]+)['\"]", content)
+            if m:
+                return m.group(1)
+        except Exception:
+            pass
+        return "0.0.0"
+
+    @staticmethod
+    def _parse_version(text):
+        """Parse 'v1.2.3' / '1.2.3' into a comparable (major, minor, patch)."""
+        text = (text or "").strip().lstrip("vV")
+        parts = []
+        for p in text.split(".")[:3]:
+            try:
+                parts.append(int(p))
+            except ValueError:
+                parts.append(0)
+        while len(parts) < 3:
+            parts.append(0)
+        return tuple(parts[:3])
+
+    def check_for_updates(self):
+        threading.Thread(target=self._check_updates_worker, daemon=True).start()
+
+    def _check_updates_worker(self):
+        """Hit the GitHub releases API in the background, prompt if newer."""
+        try:
+            req = urllib.request.Request(
+                UPDATE_CHECK_URL,
+                headers={"User-Agent": f"SECTalk-Launcher/{self.installed_version}",
+                         "Accept": "application/vnd.github+json"})
+            with urllib.request.urlopen(req, timeout=12) as resp:
+                release = json.loads(resp.read().decode("utf-8"))
+        except Exception:
+            return  # silently ignore network / API failures
+
+        tag = (release.get("tag_name") or "").strip()
+        if not tag:
+            return
+
+        latest = self._parse_version(tag)
+        current = self._parse_version(self.installed_version)
+        if latest <= current:
+            self.after(0, lambda: self._log(
+                f"Update check: up to date (latest v{tag.lstrip('vV')})"))
+            return
+
+        asset = next((a for a in release.get("assets", [])
+                      if (a.get("name") or "").lower().startswith("sectalk-setup-")
+                      and (a.get("name") or "").lower().endswith(".exe")), None)
+        if not asset or not asset.get("browser_download_url"):
+            return
+
+        self.after(0, lambda: self._log(f"Update available: v{tag.lstrip('vV')}"))
+        self.after(0, lambda: self._prompt_update(
+            tag, asset.get("browser_download_url"), asset.get("name"),
+            asset.get("size") or 0))
+
+    def _prompt_update(self, tag, download_url, asset_name, size):
+        if self.update_dialog is not None and self.update_dialog.winfo_exists():
+            return
+
+        dlg = tk.Toplevel(self)
+        self.update_dialog = dlg
+        dlg.title("Update Available — SECTalk")
+        dlg.configure(bg=BG)
+        dlg.resizable(False, False)
+
+        w, h = 440, 250
+        sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
+        dlg.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
+        dlg.transient(self)
+        dlg.grab_set()
+        dlg.bind("<Escape>", lambda e: self._on_skip(dlg))
+
+        try:
+            hwnd = ctypes.windll.user32.GetParent(dlg.winfo_id())
+            value = ctypes.c_int(1)
+            ctypes.windll.dwmapi.DwmSetWindowAttribute(
+                hwnd, 20, ctypes.byref(value), ctypes.sizeof(value))
+        except Exception:
+            pass
+
+        new_ver = tag.lstrip("vV")
+        info = tk.Frame(dlg, bg=BG)
+        info.pack(fill="both", expand=True, padx=30, pady=(24, 4))
+
+        tk.Label(info, text="UPDATE AVAILABLE", font=self.font_btn,
+                 bg=BG, fg=ACCENT).pack(anchor="w")
+        tk.Label(info, text=f"SECTalk v{self.installed_version} is running.",
+                 font=self.font_subtitle, bg=BG, fg=TEXT_DIM).pack(anchor="w", pady=(2, 8))
+        tk.Label(info, text=f"A new version is available: v{new_ver}",
+                 font=self.font_status, bg=BG, fg=TEXT).pack(anchor="w")
+        size_note = f"Installer size: {size / 1024 / 1024:.1f} MB" if size else ""
+        tk.Label(info, text=size_note, font=self.font_label,
+                 bg=BG, fg=TEXT_DIM).pack(anchor="w", pady=(6, 0))
+
+        dl_frame = tk.Frame(dlg, bg=BG)
+        status_var = tk.StringVar(value="")
+        tk.Label(dl_frame, textvariable=status_var, font=self.font_label,
+                 bg=BG, fg=TEXT_DIM).pack(anchor="w", pady=(0, 4))
+        style = ttk.Style(dlg)
+        try:
+            style.theme_use("clam")
+        except Exception:
+            pass
+        style.configure("Update.Horizontal.TProgressbar",
+                        troughcolor=SURFACE, background=ACCENT,
+                        bordercolor=BORDER, lightcolor=ACCENT, darkcolor=ACCENT)
+        progress = ttk.Progressbar(dl_frame, style="Update.Horizontal.TProgressbar",
+                                   length=380, mode="determinate", maximum=100)
+        progress.pack(anchor="w")
+
+        # Keep refs on the dialog for the download thread
+        dlg.status_var = status_var
+        dlg.progress = progress
+
+        btns = tk.Frame(dlg, bg=BG)
+        btns.pack(fill="x", padx=30, pady=(8, 20))
+
+        skip_btn = tk.Canvas(btns, height=36, bg=SURFACE_2,
+                             highlightthickness=0, cursor="hand2")
+        skip_btn.pack(side="left", expand=True, fill="x", padx=(0, 8))
+        skip_txt = skip_btn.create_text(0, 18, text="Skip", fill=TEXT,
+                                        font=self.font_label)
+        skip_btn.bind("<Configure>", lambda e: skip_btn.coords(
+            skip_txt, e.width / 2, e.height / 2))
+        skip_btn.bind("<Button-1>", lambda e: self._on_skip(dlg))
+        skip_btn.bind("<Enter>", lambda e: skip_btn.config(bg=BORDER))
+        skip_btn.bind("<Leave>", lambda e: skip_btn.config(bg=SURFACE_2))
+
+        install_btn = tk.Canvas(btns, height=36, bg=ACCENT,
+                                highlightthickness=0, cursor="hand2")
+        install_btn.pack(side="left", expand=True, fill="x", padx=(8, 0))
+        install_txt = install_btn.create_text(0, 18, text="Install Update",
+                                              fill="white", font=self.font_label)
+        install_btn.bind("<Configure>", lambda e: install_btn.coords(
+            install_txt, e.width / 2, e.height / 2))
+        install_btn.bind("<Button-1>",
+                         lambda e: self._start_download(dlg, download_url, asset_name))
+        install_btn.bind("<Enter>", lambda e: install_btn.config(bg=ACCENT_HOVER))
+        install_btn.bind("<Leave>", lambda e: install_btn.config(bg=ACCENT))
+
+        dlg.info = info
+        dlg.btns = btns
+        dlg.dl_frame = dl_frame
+
+    def _on_skip(self, dlg):
+        if dlg is not None and dlg.winfo_exists():
+            dlg.grab_release()
+            dlg.destroy()
+        self.update_dialog = None
+
+    def _start_download(self, dlg, url, asset_name):
+        # Swap info + buttons for the download progress view
+        dlg.info.pack_forget()
+        dlg.btns.pack_forget()
+        dlg.dl_frame.pack(fill="both", expand=True, padx=30, pady=(30, 30))
+        dlg.grab_release()
+        threading.Thread(target=self._download_worker,
+                         args=(url, asset_name, dlg), daemon=True).start()
+
+    def _download_worker(self, url, asset_name, dlg):
+        dest = os.path.join(tempfile.gettempdir(), asset_name)
+        part = dest + ".part"
+        try:
+            req = urllib.request.Request(
+                url, headers={"User-Agent": f"SECTalk-Launcher/{self.installed_version}"})
+            with urllib.request.urlopen(req, timeout=30) as resp:
+                total = resp.headers.get("Content-Length")
+                total = int(total) if total and total.isdigit() else 0
+                downloaded = 0
+                with open(part, "wb") as f:
+                    while True:
+                        chunk = resp.read(65536)
+                        if not chunk:
+                            break
+                        f.write(chunk)
+                        downloaded += len(chunk)
+                        if total:
+                            pct = int(downloaded * 100 / total)
+                            self.after(0, lambda p=pct: (
+                                dlg.progress.configure(value=p),
+                                dlg.status_var.set(f"Downloading… {p}%")))
+            os.replace(part, dest)
+            self.after(0, lambda: (
+                dlg.status_var.set("Installing update…"),
+                dlg.progress.configure(value=0)))
+            self.after(400, lambda: self._install_update(dest, dlg))
+        except Exception as e:
+            self.after(0, lambda: (
+                dlg.status_var.set(f"Download failed: {e}"),
+                dlg.progress.configure(value=0)))
+
+    def _install_update(self, installer_path, dlg=None):
+        try:
+            subprocess.Popen(
+                [installer_path, "/VERYSILENT", "/SUPPRESSMSGBOXES",
+                 "/NORESTART", "/SP-"],
+                close_fds=True)
+        except Exception as e:
+            self.after(0, lambda: self._log(f"Failed to launch installer: {e}"))
+            return
+        self._log("Update installer launched — closing launcher to finish the update.")
+        self.after(1500, self._on_close)
 
     def _on_close(self):
         if self.server_running:
