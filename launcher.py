@@ -139,8 +139,25 @@ class SECTalkLauncher(tk.Tk):
         # Detect installed version (single source of truth: backend/server.js)
         self.installed_version = self._get_installed_version()
 
+        # Remove stale updater leftovers (renamed self during a previous update)
+        self._clean_stale_updates()
+
         # Silently check for updates shortly after the window paints
         self.after(1200, self.check_for_updates)
+
+    def _clean_stale_updates(self):
+        """Remove SECTalk.old.*.exe leftovers from a previous self-update."""
+        try:
+            root = get_project_root()
+            for name in os.listdir(root):
+                if name.startswith("SECTalk.old.") and name.lower().endswith(".exe"):
+                    try:
+                        os.remove(os.path.join(root, name))
+                        self._log(f"Removed stale updater file: {name}")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
 
     # ── Dark Title Bar ────────────────────────────────────────────────────────
     def _apply_dark_titlebar(self):
@@ -630,16 +647,45 @@ class SECTalkLauncher(tk.Tk):
                 dlg.progress.configure(value=0)))
 
     def _install_update(self, installer_path, dlg=None):
+        # Install into the folder this launcher is running from, so the update
+        # always replaces the copy that is actually in use (local appdata can
+        # resolve to a different drive/user folder between sessions).
+        app_dir = os.path.dirname(sys.executable)
+        # Stop the backend first: node.exe keeps backend/* locked, which would
+        # make the silent installer abort and leave the app un-updated.
+        try:
+            self._stop_server()
+        except Exception:
+            pass
+        # Free the SECTalk.exe slot before the installer runs. A running exe
+        # can be RENAMED on Windows (but not overwritten), so move this
+        # launcher aside — then nothing is locking the installer's target and
+        # Windows/Inno won't abort with "application in use". The stale
+        # SECTalk.old.*.exe is removed on the next launch.
+        try:
+            os.rename(sys.executable,
+                      os.path.join(app_dir, f"SECTalk.old.{os.getpid()}.exe"))
+        except Exception:
+            pass
         try:
             subprocess.Popen(
                 [installer_path, "/VERYSILENT", "/SUPPRESSMSGBOXES",
-                 "/NORESTART", "/SP-"],
+                 "/NORESTART", "/SP-", f'/DIR="{app_dir}"'],
                 close_fds=True)
         except Exception as e:
             self.after(0, lambda: self._log(f"Failed to launch installer: {e}"))
             return
-        self._log("Update installer launched — closing launcher to finish the update.")
-        self.after(1500, self._on_close)
+        self._log("Update installer launched — the app will restart automatically.")
+        if dlg is not None:
+            try:
+                dlg.status_var.set(
+                    "Installing update… the app will restart automatically.")
+                dlg.progress.configure(value=100)
+            except Exception:
+                pass
+        # Close shortly after the installer starts; its [Run] postinstall step
+        # relaunches the freshly installed app.
+        self.after(2000, self._on_close)
 
     def _on_close(self):
         if self.server_running:
