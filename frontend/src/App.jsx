@@ -162,8 +162,8 @@ export default function App() {
     });
     
     // Use ref so we always call the latest version of playAudioChunk
-    newSocket.on('audio-broadcast', async ({ chunk, from }) => {
-      playAudioChunkRef.current?.(chunk, from);
+    newSocket.on('audio-broadcast', async ({ chunk, from, sampleRate }) => {
+      playAudioChunkRef.current?.(chunk, from, sampleRate);
       
       // Update active talkers UI
       setActiveTalkers(prev => {
@@ -229,7 +229,7 @@ export default function App() {
   }, []);
 
   // Audio Playback
-  const playAudioChunk = useCallback(async (arrayBuffer, fromUsername) => {
+  const playAudioChunk = useCallback(async (arrayBuffer, fromUsername, sampleRate) => {
     try {
       if (!playContextRef.current) {
         playContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
@@ -243,7 +243,8 @@ export default function App() {
         await ctx.resume();
       }
       const pcmData = new Float32Array(arrayBuffer);
-      const buffer = ctx.createBuffer(1, pcmData.length, ctx.sampleRate);
+      const bufferRate = (sampleRate && sampleRate >= 8000 && sampleRate <= 96000) ? sampleRate : ctx.sampleRate;
+      const buffer = ctx.createBuffer(1, pcmData.length, bufferRate);
       buffer.getChannelData(0).set(pcmData);
       
       const source = ctx.createBufferSource();
@@ -290,7 +291,7 @@ export default function App() {
       });
       streamRef.current = stream;
       
-      const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+      const audioCtx = new (window.AudioContext || window.webkitAudioContext)({ sampleRate: 48000 });
       audioContextRef.current = audioCtx;
       
       const source = audioCtx.createMediaStreamSource(stream);
@@ -314,6 +315,7 @@ export default function App() {
         const pcmData = new Float32Array(inputData);
         socket.emit('audio-chunk', { 
           chunk: pcmData.buffer, 
+          sampleRate: audioCtx.sampleRate,
           targetChannels: role === 'master' ? masterTargetsRef.current : undefined,
           targetUsers: role === 'master' ? targetUsersRef.current : undefined,
           talkbackOnly: talkbackOnly

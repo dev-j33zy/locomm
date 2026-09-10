@@ -66,7 +66,7 @@ const PROTOCOL = sslOptions ? 'https' : 'http';
 const app = express();
 app.use(cors());
 
-const APP_VERSION = '1.0.0';
+const APP_VERSION = '1.0.2';
 
 // Serve the production frontend
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
@@ -208,7 +208,7 @@ io.on('connection', (socket) => {
     }
   });
 
-  socket.on('audio-chunk', ({ chunk, targetChannels, targetUsers, talkbackOnly }) => {
+  socket.on('audio-chunk', ({ chunk, sampleRate, targetChannels, targetUsers, talkbackOnly }) => {
     if (socket.role === 'master') {
       const destinations = new Set();
       
@@ -245,15 +245,15 @@ io.on('connection', (socket) => {
       }
 
       destinations.forEach(socketId => {
-        io.to(socketId).emit('audio-broadcast', { chunk, from: socket.username, channel: 'master-direct' });
+        io.to(socketId).emit('audio-broadcast', { chunk, from: socket.username, channel: 'master-direct', sampleRate });
       });
     } else {
       // Regular user talking - only to users who have joined
       if (socket.username && socket.currentChannel) {
         if (talkbackOnly) {
-          socket.to('master').emit('audio-broadcast', { chunk, from: socket.username, channel: socket.currentChannel });
+          socket.to('master').emit('audio-broadcast', { chunk, from: socket.username, channel: socket.currentChannel, sampleRate });
         } else {
-          socket.to(socket.currentChannel).emit('audio-broadcast', { chunk, from: socket.username, channel: socket.currentChannel });
+          socket.to(socket.currentChannel).emit('audio-broadcast', { chunk, from: socket.username, channel: socket.currentChannel, sampleRate });
         }
       }
     }
