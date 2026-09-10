@@ -66,7 +66,7 @@ const PROTOCOL = sslOptions ? 'https' : 'http';
 const app = express();
 app.use(cors());
 
-const APP_VERSION = '1.0.5';
+const APP_VERSION = '1.0.6';
 
 // Serve the production frontend
 const distPath = path.join(__dirname, '..', 'frontend', 'dist');
