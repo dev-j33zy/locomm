@@ -44,6 +44,23 @@ def resource_path(relative):
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative)
 
 
+def clean_notes(text):
+    """Strip basic markdown so release notes read cleanly in a plain text box."""
+    lines = []
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line:
+            lines.append("")
+            continue
+        if line.startswith("---"):
+            continue
+        while line.startswith("#"):
+            line = line.lstrip("#").lstrip()
+        line = line.replace("**", "").replace("*", "")
+        lines.append(line)
+    return "\n".join(lines).strip("\n")
+
+
 def get_project_root():
     """Return the SECTalk project root directory."""
     if getattr(sys, '_MEIPASS', None):
@@ -452,9 +469,9 @@ class SECTalkLauncher(tk.Tk):
         self.after(0, lambda: self._log(f"Update available: v{tag.lstrip('vV')}"))
         self.after(0, lambda: self._prompt_update(
             tag, asset.get("browser_download_url"), asset.get("name"),
-            asset.get("size") or 0))
+            asset.get("size") or 0, release.get("body") or ""))
 
-    def _prompt_update(self, tag, download_url, asset_name, size):
+    def _prompt_update(self, tag, download_url, asset_name, size, notes=""):
         if self.update_dialog is not None and self.update_dialog.winfo_exists():
             return
 
@@ -464,7 +481,8 @@ class SECTalkLauncher(tk.Tk):
         dlg.configure(bg=BG)
         dlg.resizable(False, False)
 
-        w, h = 440, 250
+        w = 440
+        h = 480 if notes else 250
         sw, sh = self.winfo_screenwidth(), self.winfo_screenheight()
         dlg.geometry(f"{w}x{h}+{(sw - w) // 2}+{(sh - h) // 2}")
         dlg.transient(self)
@@ -493,6 +511,23 @@ class SECTalkLauncher(tk.Tk):
         tk.Label(info, text=size_note, font=self.font_label,
                  bg=BG, fg=TEXT_DIM).pack(anchor="w", pady=(6, 0))
 
+        notes_frame = tk.Frame(info, bg=BG)
+        notes_frame.pack(fill="both", expand=True, pady=(12, 0))
+        tk.Label(notes_frame, text="RELEASE NOTES", font=self.font_label,
+                 bg=BG, fg=TEXT_DIM).pack(anchor="w", pady=(0, 4))
+        notes_box = tk.Text(notes_frame, height=9, bg=SURFACE_2, fg=TEXT,
+                            insertbackground=TEXT, relief="flat", wrap="word",
+                            font=self.font_label, padx=12, pady=8,
+                            highlightthickness=1, highlightbackground=BORDER,
+                            highlightcolor=ACCENT)
+        notes_sb = ttk.Scrollbar(notes_frame, orient="vertical",
+                                 command=notes_box.yview)
+        notes_sb.pack(side="right", fill="y", padx=(6, 0))
+        notes_box.configure(yscrollcommand=notes_sb.set)
+        notes_box.pack(fill="both", expand=True)
+        notes_box.insert("1.0", clean_notes(notes) or "No release notes provided.")
+        notes_box.config(state="disabled")
+
         dl_frame = tk.Frame(dlg, bg=BG)
         status_var = tk.StringVar(value="")
         tk.Label(dl_frame, textvariable=status_var, font=self.font_label,
@@ -514,11 +549,13 @@ class SECTalkLauncher(tk.Tk):
         dlg.progress = progress
 
         btns = tk.Frame(dlg, bg=BG)
-        btns.pack(fill="x", padx=30, pady=(8, 20))
+        btns.pack(fill="x", padx=30, pady=(14, 20))
+        btns.columnconfigure(0, weight=1, uniform="btn")
+        btns.columnconfigure(1, weight=1, uniform="btn")
 
         skip_btn = tk.Canvas(btns, height=36, bg=SURFACE_2,
                              highlightthickness=0, cursor="hand2")
-        skip_btn.pack(side="left", expand=True, fill="x", padx=(0, 8))
+        skip_btn.grid(row=0, column=0, sticky="ew", padx=(0, 8))
         skip_txt = skip_btn.create_text(0, 18, text="Skip", fill=TEXT,
                                         font=self.font_label)
         skip_btn.bind("<Configure>", lambda e: skip_btn.coords(
@@ -529,7 +566,7 @@ class SECTalkLauncher(tk.Tk):
 
         install_btn = tk.Canvas(btns, height=36, bg=ACCENT,
                                 highlightthickness=0, cursor="hand2")
-        install_btn.pack(side="left", expand=True, fill="x", padx=(8, 0))
+        install_btn.grid(row=0, column=1, sticky="ew", padx=(8, 0))
         install_txt = install_btn.create_text(0, 18, text="Install Update",
                                               fill="white", font=self.font_label)
         install_btn.bind("<Configure>", lambda e: install_btn.coords(
@@ -540,6 +577,7 @@ class SECTalkLauncher(tk.Tk):
         install_btn.bind("<Leave>", lambda e: install_btn.config(bg=ACCENT))
 
         dlg.info = info
+        dlg.notes = notes_frame
         dlg.btns = btns
         dlg.dl_frame = dl_frame
 
@@ -552,6 +590,7 @@ class SECTalkLauncher(tk.Tk):
     def _start_download(self, dlg, url, asset_name):
         # Swap info + buttons for the download progress view
         dlg.info.pack_forget()
+        dlg.notes.pack_forget()
         dlg.btns.pack_forget()
         dlg.dl_frame.pack(fill="both", expand=True, padx=30, pady=(30, 30))
         dlg.grab_release()
