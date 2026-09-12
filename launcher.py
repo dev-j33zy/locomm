@@ -13,6 +13,7 @@ import threading
 import socket
 import os
 import sys
+import time
 import re
 import json
 import tempfile
@@ -435,7 +436,7 @@ class SECTalkLauncher(tk.Tk):
                 return m.group(1)
         except Exception:
             pass
-        return "0.0.0"
+        return None
 
     @staticmethod
     def _parse_version(text):
@@ -456,6 +457,12 @@ class SECTalkLauncher(tk.Tk):
 
     def _check_updates_worker(self):
         """Hit the GitHub releases API in the background, prompt if newer."""
+        # If the installed version cannot be read (missing/corrupt backend),
+        # don't nag with a bogus "0.0.0 < latest" comparison on every launch.
+        if not self.installed_version:
+            self.after(0, lambda: self._log(
+                "Update check skipped: installed version could not be detected."))
+            return
         try:
             req = urllib.request.Request(
                 UPDATE_CHECK_URL,
@@ -668,7 +675,7 @@ class SECTalkLauncher(tk.Tk):
         except Exception:
             pass
         try:
-            subprocess.Popen(
+            proc = subprocess.Popen(
                 [installer_path, "/VERYSILENT", "/SUPPRESSMSGBOXES",
                  "/NORESTART", "/SP-", f'/DIR="{app_dir}"'],
                 close_fds=True)
@@ -683,9 +690,47 @@ class SECTalkLauncher(tk.Tk):
                 dlg.progress.configure(value=100)
             except Exception:
                 pass
-        # Close shortly after the installer starts; its [Run] postinstall step
-        # relaunches the freshly installed app.
-        self.after(2000, self._on_close)
+        # Wait for the silent install to finish, then relaunch the freshly
+        # installed app ourselves. Inno's [Run] postinstall step is unreliable
+        # in silent mode, so we drive the relaunch instead.
+        threading.Thread(
+            target=self._wait_for_install_and_relaunch,
+            args=(proc, app_dir, dlg), daemon=True).start()
+
+    def _wait_for_install_and_relaunch(self, proc, app_dir, dlg=None):
+        try:
+            proc.wait()
+        except Exception:
+            pass
+        # Give the installer a moment to release its handles before we restart.
+        time.sleep(1)
+        self.after(0, lambda: self._relaunch_after_update(app_dir, dlg))
+
+    def _relaunch_after_update(self, app_dir, dlg=None):
+        new_exe = os.path.join(app_dir, "SECTalk.exe")
+        if os.path.isfile(new_exe):
+            self._log("Update finished — relaunching SECTalk.")
+            try:
+                subprocess.Popen([new_exe], cwd=app_dir, close_fds=True)
+            except Exception as e:
+                self._log(f"Relaunch failed: {e} — open SECTalk from the Start Menu.")
+        else:
+            self._log("Update finished, but SECTalk.exe is missing — "
+                      "open SECTalk from the Start Menu.")
+        if dlg is not None and dlg.winfo_exists():
+            try:
+                dlg.grab_release()
+            except Exception:
+                pass
+            try:
+                dlg.destroy()
+            except Exception:
+                pass
+        try:
+            self._stop_server()
+        except Exception:
+            pass
+        self.destroy()
 
     def _on_close(self):
         if self.server_running:

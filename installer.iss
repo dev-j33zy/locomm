@@ -2,7 +2,7 @@
 ; Bundles: SECTalk.exe launcher, Node.js portable, backend + built frontend
 
 #define MyAppName "SECTalk"
-#define MyAppVersion "1.0.8"
+#define MyAppVersion "1.0.9"
 #define MyAppPublisher "SECTalk"
 #define MyAppExeName "SECTalk.exe"
 
@@ -60,6 +60,7 @@ Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
 Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
 
 [Run]
-; Launch the app after install — including SILENT self-updates (skipifsilent was
-; preventing the app from relaunching after an automatic update).
-Filename: "{app}\{#MyAppExeName}"; Description: "Launch SECTalk"; Flags: nowait postinstall
+; Launch the app after an INTERACTIVE install. Silent self-updates skip this
+; step (skipifsilent): the launcher waits for the installer to finish and then
+; relaunches the freshly installed app itself, so we don't double-launch.
+Filename: "{app}\{#MyAppExeName}"; Description: "Launch SECTalk"; Flags: nowait postinstall skipifsilent
