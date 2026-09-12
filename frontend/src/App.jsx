@@ -222,12 +222,14 @@ export default function App() {
     });
   };
 
-  // Devices Enumeration
+  // Devices Enumeration — refreshes live so connected Bluetooth devices appear in both lists
   useEffect(() => {
+    let mounted = true;
     const getDevices = async () => {
       try {
         await navigator.mediaDevices.getUserMedia({ audio: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
+        if (!mounted) return;
         const audioIns = devices.filter(d => d.kind === 'audioinput');
         const audioOuts = devices.filter(d => d.kind === 'audiooutput');
         setInputs(audioIns);
@@ -241,7 +243,43 @@ export default function App() {
       }
     };
     getDevices();
+
+    // Live refresh on Bluetooth / USB device connect & disconnect
+    const handleDeviceChange = () => getDevices();
+    if (navigator.mediaDevices?.addEventListener) {
+      navigator.mediaDevices.addEventListener('devicechange', handleDeviceChange);
+    }
+    return () => {
+      mounted = false;
+      if (navigator.mediaDevices?.removeEventListener) {
+        navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
+      }
+    };
   }, []);
+
+  // Auto-select the matching output device (e.g. Bluetooth headset speaker) when the input changes.
+  // Bluetooth headsets expose their mic + speaker under the same groupId, so we link them together.
+  const autoMatchedInputRef = useRef('');
+  useEffect(() => {
+    if (!selectedInput || inputs.length === 0 || outputs.length === 0) return;
+    if (selectedInput === autoMatchedInputRef.current) return;
+
+    const inputDev = inputs.find(i => i.deviceId === selectedInput);
+    if (!inputDev) return;
+
+    let match = null;
+    if (inputDev.groupId) {
+      match = outputs.find(o => o.groupId === inputDev.groupId);
+    }
+    if (!match) {
+      match = outputs.find(o => o.deviceId === selectedInput);
+    }
+
+    if (match && match.deviceId !== selectedOutput) {
+      setSelectedOutput(match.deviceId);
+      autoMatchedInputRef.current = selectedInput;
+    }
+  }, [selectedInput, inputs, outputs, selectedOutput]);
 
   // Audio Playback
   const playAudioChunk = useCallback(async (arrayBuffer, fromUsername, sampleRate) => {
@@ -280,6 +318,14 @@ export default function App() {
   useEffect(() => {
     playAudioChunkRef.current = playAudioChunk;
   }, [playAudioChunk]);
+
+  // Re-apply the output device to the live playback context when it changes mid-session
+  useEffect(() => {
+    const ctx = playContextRef.current;
+    if (ctx && selectedOutput && typeof ctx.setSinkId === 'function') {
+      ctx.setSinkId(selectedOutput).catch(e => console.error(e));
+    }
+  }, [selectedOutput]);
 
   // PTT Logic — wrapped in useCallback for stable references in keyboard/MediaSession effects
   const startRecording = useCallback(async (talkbackOnly = false) => {
