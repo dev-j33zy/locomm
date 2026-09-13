@@ -13,7 +13,6 @@ import threading
 import socket
 import os
 import sys
-import time
 import re
 import json
 import tempfile
@@ -682,6 +681,7 @@ class SECTalkLauncher(tk.Tk):
         # always replaces the copy that is actually in use (local appdata can
         # resolve to a different drive/user folder between sessions).
         app_dir = os.path.dirname(sys.executable)
+        old_exe = os.path.join(app_dir, f"SECTalk.old.{os.getpid()}.exe")
         # Stop the backend first: node.exe keeps backend/* locked, which would
         # make the silent installer abort and leave the app un-updated.
         try:
@@ -693,18 +693,26 @@ class SECTalkLauncher(tk.Tk):
         # launcher aside — then nothing is locking the installer's target and
         # Windows/Inno won't abort with "application in use". The stale
         # SECTalk.old.*.exe is removed on the next launch.
+        moved = False
         try:
-            os.rename(sys.executable,
-                      os.path.join(app_dir, f"SECTalk.old.{os.getpid()}.exe"))
+            os.rename(sys.executable, old_exe)
+            moved = True
         except Exception:
-            pass
+            moved = False
         try:
+            # Pass /DIR WITHOUT embedded quotes: subprocess escapes the value
+            # correctly on Windows, and app_dir may legitimately contain spaces.
             proc = subprocess.Popen(
                 [installer_path, "/VERYSILENT", "/SUPPRESSMSGBOXES",
-                 "/NORESTART", "/SP-", f'/DIR="{app_dir}"'],
+                 "/NORESTART", "/SP-", f"/DIR={app_dir}"],
                 close_fds=True)
         except Exception as e:
             self.after(0, lambda: self._log(f"Failed to launch installer: {e}"))
+            if moved:
+                try:
+                    os.rename(old_exe, sys.executable)
+                except Exception:
+                    pass
             return
         self._log("Update installer launched — the app will restart automatically.")
         if dlg is not None:
@@ -714,33 +722,67 @@ class SECTalkLauncher(tk.Tk):
                 dlg.progress.configure(value=100)
             except Exception:
                 pass
-        # Wait for the silent install to finish, then relaunch the freshly
-        # installed app ourselves. Inno's [Run] postinstall step is unreliable
-        # in silent mode, so we drive the relaunch instead.
-        threading.Thread(
-            target=self._wait_for_install_and_relaunch,
-            args=(proc, app_dir, dlg), daemon=True).start()
+        # Watch the installer from the main loop (tkinter isn't thread-safe: a
+        # relaunch scheduled from a worker thread can be dropped silently). When
+        # the installer exits we drive the relaunch ourselves — Inno's [Run]
+        # postinstall step is unreliable in silent mode.
+        self._poll_installer(proc, app_dir, old_exe, moved, dlg)
 
-    def _wait_for_install_and_relaunch(self, proc, app_dir, dlg=None):
+    def _poll_installer(self, proc, app_dir, old_exe, moved, dlg=None):
         try:
-            proc.wait()
+            code = proc.poll()
         except Exception:
-            pass
-        # Give the installer a moment to release its handles before we restart.
-        time.sleep(1)
-        self.after(0, lambda: self._relaunch_after_update(app_dir, dlg))
+            code = 0
+        if code is None:
+            self.after(500, lambda: self._poll_installer(
+                proc, app_dir, old_exe, moved, dlg))
+            return
+        # Give the installer a moment to release its handles before restart.
+        self.after(1200, lambda: self._relaunch_after_update(
+            app_dir, old_exe, moved, code, dlg))
 
-    def _relaunch_after_update(self, app_dir, dlg=None):
+    def _relaunch_after_update(self, app_dir, old_exe, moved,
+                               exit_code=0, dlg=None):
         new_exe = os.path.join(app_dir, "SECTalk.exe")
         if os.path.isfile(new_exe):
-            self._log("Update finished — relaunching SECTalk.")
+            self._log(
+                f"Update finished (installer exit {exit_code}) — relaunching SECTalk.")
             try:
-                subprocess.Popen([new_exe], cwd=app_dir, close_fds=True)
+                creationflags = (subprocess.DETACHED_PROCESS
+                                 | subprocess.CREATE_NEW_PROCESS_GROUP
+                                 ) if sys.platform == "win32" else 0
+                subprocess.Popen([new_exe], cwd=app_dir, close_fds=True,
+                                 creationflags=creationflags)
             except Exception as e:
                 self._log(f"Relaunch failed: {e} — open SECTalk from the Start Menu.")
         else:
-            self._log("Update finished, but SECTalk.exe is missing — "
-                      "open SECTalk from the Start Menu.")
+            # The silent install failed (locked files, permissions, bad archive).
+            # Bring the previous launcher back so the user is never stranded
+            # with a "failed update" and no way back.
+            self._log(f"Update install FAILED (installer exit {exit_code}). "
+                      "Restoring the previous version.")
+            if moved and os.path.isfile(old_exe):
+                try:
+                    os.rename(old_exe, new_exe)
+                except Exception:
+                    pass
+            relaunch_exe = new_exe if os.path.isfile(new_exe) else None
+            if relaunch_exe is None and os.path.isfile(old_exe):
+                relaunch_exe = old_exe
+            if relaunch_exe is None and not moved and os.path.isfile(sys.executable):
+                relaunch_exe = sys.executable
+            if relaunch_exe:
+                try:
+                    creationflags = (subprocess.DETACHED_PROCESS
+                                     | subprocess.CREATE_NEW_PROCESS_GROUP
+                                     ) if sys.platform == "win32" else 0
+                    subprocess.Popen([relaunch_exe], cwd=app_dir, close_fds=True,
+                                     creationflags=creationflags)
+                except Exception:
+                    pass
+            else:
+                self._log("Previous launcher could not be restored — "
+                          "open SECTalk from the Start Menu.")
         if dlg is not None and dlg.winfo_exists():
             try:
                 dlg.grab_release()
@@ -750,6 +792,7 @@ class SECTalkLauncher(tk.Tk):
                 dlg.destroy()
             except Exception:
                 pass
+        self.update_dialog = None
         try:
             self._stop_server()
         except Exception:

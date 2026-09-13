@@ -13,6 +13,50 @@ const getContrastYIQ = (hexcolor) => {
   return (yiq >= 128) ? '#000000' : '#ffffff';
 };
 
+// Browsers report pseudo "default" / "communications" endpoints. We only want
+// real physical units (speakers, mics, Bluetooth headsets by device name).
+const PSEUDO_DEVICE_IDS = new Set(['default', 'communications']);
+
+// Normalize a device name so the same unit reads identically in both the input
+// and output dropdowns (Chrome prefixes some entries with "Default - ").
+const cleanDeviceLabel = (label, kind) => {
+  let name = (label || '').trim().replace(/^(default|communications)\s*[-–—]?\s*/i, '');
+  if (!name) name = kind === 'audioinput' ? 'Microphone' : 'Speaker';
+  return name;
+};
+
+// Build a dropdown-ready list for one device kind:
+//  - drops the 'default' / 'communications' pseudo-devices
+//  - keeps entries enumerated with a real groupId when duplicates exist
+//  - dedupes by label (Chrome often lists the same Bluetooth headset twice:
+//    once for the stereo profile and again for hands-free telephony)
+const buildDeviceList = (devices, kind) => {
+  const seen = new Map();
+  for (const d of devices) {
+    if (d.kind !== kind) continue;
+    if (PSEUDO_DEVICE_IDS.has(d.deviceId)) continue;
+    const label = cleanDeviceLabel(d.label, kind);
+    const prev = seen.get(label);
+    if (!prev || (!prev.groupId && d.groupId)) {
+      seen.set(label, { ...d, label });
+    }
+  }
+  const list = [...seen.values()];
+  list.sort((a, b) => a.label.localeCompare(b.label));
+  return list;
+};
+
+// Bluetooth headsets expose their mic + speaker under the same groupId, so a
+// matching input/output belongs to the SAME physical unit. Fall back to
+// deviceId when groupId is unavailable.
+const matchOutputForInput = (inputDev, outputs) =>
+  outputs.find(o => o.groupId && inputDev?.groupId && o.groupId === inputDev.groupId)
+  || outputs.find(o => o.deviceId === inputDev?.deviceId) || null;
+
+const matchInputForOutput = (outputDev, inputs) =>
+  inputs.find(i => i.groupId && outputDev?.groupId && i.groupId === outputDev.groupId)
+  || inputs.find(i => i.deviceId === outputDev?.deviceId) || null;
+
 export default function App() {
   const socketRef = useRef(null);
   const [socket, setSocket] = useState(null);
@@ -222,7 +266,15 @@ export default function App() {
     });
   };
 
-  // Devices Enumeration — refreshes live so connected Bluetooth devices appear in both lists
+  // Devices Enumeration — refreshes live so connected Bluetooth devices appear
+  // in both lists as real named units (no "Default" pseudo-device).
+  // Live mirrors of the selections let the (mounted-once) enumerator keep the
+  // input/output dropdowns in sync without re-enumerating on every change.
+  const selectedInputRef = useRef(selectedInput);
+  useEffect(() => { selectedInputRef.current = selectedInput; }, [selectedInput]);
+  const selectedOutputRef = useRef(selectedOutput);
+  useEffect(() => { selectedOutputRef.current = selectedOutput; }, [selectedOutput]);
+
   useEffect(() => {
     let mounted = true;
     const getDevices = async () => {
@@ -230,19 +282,28 @@ export default function App() {
         await navigator.mediaDevices.getUserMedia({ audio: true });
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (!mounted) return;
-        const audioIns = devices.filter(d => d.kind === 'audioinput');
-        const audioOuts = devices.filter(d => d.kind === 'audiooutput');
-        setInputs(audioIns);
-        setOutputs(audioOuts);
+        const insList = buildDeviceList(devices, 'audioinput');
+        const outsList = buildDeviceList(devices, 'audiooutput');
+        setInputs(insList);
+        setOutputs(outsList);
         setSelectedInput(prev =>
-          (prev && audioIns.some(i => i.deviceId === prev)) ? prev : (audioIns[0]?.deviceId || ''));
-        setSelectedOutput(prev =>
-          (prev && audioOuts.some(o => o.deviceId === prev)) ? prev : (audioOuts[0]?.deviceId || ''));
+          (prev && insList.some(i => i.deviceId === prev)) ? prev : (insList[0]?.deviceId || ''));
+        setSelectedOutput(prev => {
+          if (prev && outsList.some(o => o.deviceId === prev)) return prev;
+          // Fall back to a unit that matches the current input (Bluetooth headset).
+          const inputDev = insList.find(i => i.deviceId === selectedInputRef.current);
+          const match = matchOutputForInput(inputDev, outsList);
+          return match ? match.deviceId : (outsList[0]?.deviceId || '');
+        });
       } catch (err) {
         console.error('Error fetching devices', err);
       }
     };
     getDevices();
+
+    // Browsers sometimes only expose output (incl. Bluetooth) labels a beat
+    // after the mic permission settles, so re-enumerate once shortly after.
+    const retryTimer = setTimeout(getDevices, 1500);
 
     // Live refresh on Bluetooth / USB device connect & disconnect
     const handleDeviceChange = () => getDevices();
@@ -251,35 +312,29 @@ export default function App() {
     }
     return () => {
       mounted = false;
+      clearTimeout(retryTimer);
       if (navigator.mediaDevices?.removeEventListener) {
         navigator.mediaDevices.removeEventListener('devicechange', handleDeviceChange);
       }
     };
   }, []);
 
-  // Auto-select the matching output device (e.g. Bluetooth headset speaker) when the input changes.
-  // Bluetooth headsets expose their mic + speaker under the same groupId, so we link them together.
-  const autoMatchedInputRef = useRef('');
-  useEffect(() => {
-    if (!selectedInput || inputs.length === 0 || outputs.length === 0) return;
-    if (selectedInput === autoMatchedInputRef.current) return;
+  // Keep the input and output dropdowns on the SAME physical unit: picking an
+  // input auto-selects that unit's output (and vice-versa), so a Bluetooth
+  // headset's mic and speaker stay linked in both lists.
+  const handleInputChange = (v) => {
+    setSelectedInput(v);
+    const match = matchOutputForInput(
+      inputs.find(i => i.deviceId === v), outputs);
+    if (match) setSelectedOutput(match.deviceId);
+  };
 
-    const inputDev = inputs.find(i => i.deviceId === selectedInput);
-    if (!inputDev) return;
-
-    let match = null;
-    if (inputDev.groupId) {
-      match = outputs.find(o => o.groupId === inputDev.groupId);
-    }
-    if (!match) {
-      match = outputs.find(o => o.deviceId === selectedInput);
-    }
-
-    if (match && match.deviceId !== selectedOutput) {
-      setSelectedOutput(match.deviceId);
-      autoMatchedInputRef.current = selectedInput;
-    }
-  }, [selectedInput, inputs, outputs, selectedOutput]);
+  const handleOutputChange = (v) => {
+    setSelectedOutput(v);
+    const match = matchInputForOutput(
+      outputs.find(o => o.deviceId === v), inputs);
+    if (match) setSelectedInput(match.deviceId);
+  };
 
   // Audio Playback
   const playAudioChunk = useCallback(async (arrayBuffer, fromUsername, sampleRate) => {
@@ -668,15 +723,19 @@ export default function App() {
             <div style={{ gridColumn: '1 / -1', display: 'grid', gridTemplateColumns: '1fr 1fr', gap: '1rem' }}>
               <div className="form-group">
                 <label>Input Device</label>
-                <select value={selectedInput} onChange={e => setSelectedInput(e.target.value)}>
-                  {inputs.map(i => <option key={i.deviceId} value={i.deviceId}>{i.label || 'Default Mic'}</option>)}
+                <select value={selectedInput} onChange={e => handleInputChange(e.target.value)}>
+                  {inputs.length === 0
+                    ? <option value="">No microphone found</option>
+                    : inputs.map(i => <option key={i.deviceId} value={i.deviceId}>{i.label}</option>)}
                 </select>
               </div>
 
               <div className="form-group">
                 <label>Output Device</label>
-                <select value={selectedOutput} onChange={e => setSelectedOutput(e.target.value)}>
-                  {outputs.map(o => <option key={o.deviceId} value={o.deviceId}>{o.label || 'Default Speaker'}</option>)}
+                <select value={selectedOutput} onChange={e => handleOutputChange(e.target.value)}>
+                  {outputs.length === 0
+                    ? <option value="">No speaker found</option>
+                    : outputs.map(o => <option key={o.deviceId} value={o.deviceId}>{o.label}</option>)}
                 </select>
               </div>
             </div>
