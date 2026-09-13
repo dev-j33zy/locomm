@@ -45,6 +45,28 @@ def resource_path(relative):
     return os.path.join(os.path.dirname(os.path.abspath(__file__)), relative)
 
 
+def find_resource(relative):
+    """Locate a resource file across all plausible runtime layouts.
+
+    Tries, in order: next to the running executable (installed layout),
+    the PyInstaller extraction dir (_MEIPASS), the current working dir,
+    and the source directory. Returns None if not found anywhere.
+    """
+    candidates = [
+        os.path.join(os.path.dirname(sys.executable), relative),
+        resource_path(relative),
+        os.path.join(os.getcwd(), relative),
+        os.path.join(os.path.dirname(os.path.abspath(__file__)), relative),
+    ]
+    for c in candidates:
+        try:
+            if os.path.isfile(c):
+                return c
+        except Exception:
+            pass
+    return None
+
+
 def clean_notes(text):
     """Strip basic markdown so release notes read cleanly in a plain text box."""
     lines = []
@@ -107,13 +129,15 @@ class SECTalkLauncher(tk.Tk):
         self.geometry(f"{w}x{h}+{x}+{y}")
 
         # App icon (launcher + taskbar). Falls back to default when not found.
-        try:
-            self.iconbitmap(resource_path("SECTalk.ico"))
-        except tk.TclError:
+        icon_path = find_resource("SECTalk.ico")
+        if icon_path:
             try:
-                self.iconbitmap(default="")
-            except Exception:
-                pass
+                self.iconbitmap(icon_path)
+            except tk.TclError:
+                try:
+                    self.iconbitmap(default="")
+                except Exception:
+                    pass
 
         # Dark title bar on Windows 10/11
         self._apply_dark_titlebar()

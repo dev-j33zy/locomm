@@ -2,7 +2,7 @@
 ; Bundles: SECTalk.exe launcher, Node.js portable, backend + built frontend
 
 #define MyAppName "SECTalk"
-#define MyAppVersion "1.0.10"
+#define MyAppVersion "1.0.11"
 #define MyAppPublisher "SECTalk"
 #define MyAppExeName "SECTalk.exe"
 
@@ -55,9 +55,11 @@ Source: "backend\key.pem"; DestDir: "{app}\backend"; Flags: ignoreversion skipif
 Source: "frontend\dist\*"; DestDir: "{app}\frontend\dist"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"
+; Explicit IconFilename points the shortcut at SECTalk.ico so the custom icon
+; shows even when Windows caches the old icon for the upgraded SECTalk.exe.
+Name: "{group}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\SECTalk.ico"
 Name: "{group}\Uninstall {#MyAppName}"; Filename: "{uninstallexe}"
-Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; Tasks: desktopicon
+Name: "{autodesktop}\{#MyAppName}"; Filename: "{app}\{#MyAppExeName}"; IconFilename: "{app}\SECTalk.ico"; Tasks: desktopicon
 
 [Run]
 ; Launch the app after an INTERACTIVE install. Silent self-updates skip this
