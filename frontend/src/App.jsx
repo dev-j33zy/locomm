@@ -38,6 +38,38 @@ const cleanDeviceLabel = (label, kind) => {
 //  - keeps entries enumerated with a real groupId when duplicates exist
 //  - dedupes by label (Chrome often lists the same Bluetooth headset twice:
 //    once for the stereo profile and again for hands-free telephony)
+// Browsers don't expose a device "type", so we infer one from the label
+// keywords Windows/macOS put in them. Ordered so catches like "Bluetooth ...".
+const CATEGORY_ORDER = ['Bluetooth', 'Headphones', 'Speakers', 'HDMI', 'USB', 'Other'];
+
+const inferDeviceType = (label) => {
+  const l = (label || '').toLowerCase();
+  if (/bluetooth|\bbt\b|airpod|earpod|earbud/i.test(l)) return 'Bluetooth';
+  if (/headset|headphone|earphone|earbud/i.test(l)) return 'Headphones';
+  if (/hdmi|display|monitor|tv/i.test(l)) return 'HDMI';
+  if (/\b(usb|soundbar|dongle|dock)\b/i.test(l)) return 'USB';
+  if (/speaker|loudspeaker|audio|sound|realtek/i.test(l)) return 'Speakers';
+  return 'Other';
+};
+
+// Append the inferred type for clarity, but skip it when the browser's label
+// already names the category (e.g. "... (Bluetooth)") or it's unknown.
+const typeSuffix = (label, type) => {
+  if (type === 'Other') return label;
+  const hints = {
+    Bluetooth: ['bluetooth', 'bt'],
+    Headphones: ['headphone', 'headset', 'earphone', 'earbud'],
+    Speakers: ['speaker', 'loudspeaker', 'audio', 'sound'],
+    HDMI: ['hdmi'],
+    USB: ['usb']
+  };
+  const l = label.toLowerCase();
+  return (hints[type] || []).some(h => h.length > 1 && l.includes(h))
+    ? label
+    : `${label} (${type})`;
+};
+
+// Reads the kind-filtered, deduped, alphabetically sorted list of real devices.
 const buildDeviceList = (devices, kind) => {
   const seen = new Map();
   for (const d of devices) {
@@ -58,13 +90,22 @@ const buildDeviceList = (devices, kind) => {
 // real speakers (typical on phones), fall back to a single "system speakers"
 // option so playback and the UI still work — the OS handles routing to
 // loudspeaker, wired earphones or Bluetooth automatically.
+// Real outputs are tagged with an inferred category + display label so the
+// dropdown can group them (Bluetooth / Headphones / Speakers / ...).
 const buildOutputDeviceList = (devices) => {
   const hasRealOutputs = (devices || []).some(
     d => d.kind === 'audiooutput' && !PSEUDO_DEVICE_IDS.has(d.deviceId));
-  if (hasRealOutputs) return buildDeviceList(devices, 'audiooutput');
+  if (hasRealOutputs) {
+    return buildDeviceList(devices, 'audiooutput').map(d => {
+      const deviceType = inferDeviceType(d.label);
+      return { ...d, deviceType, displayLabel: typeSuffix(d.label, deviceType) };
+    });
+  }
   return [{
     deviceId: SYSTEM_OUTPUT_ID,
     label: SYSTEM_OUTPUT_LABEL,
+    displayLabel: SYSTEM_OUTPUT_LABEL,
+    deviceType: 'Other',
     groupId: '',
     kind: 'audiooutput'
   }];
@@ -761,7 +802,16 @@ export default function App() {
                 <select value={selectedOutput} onChange={e => handleOutputChange(e.target.value)}>
                   {outputs.length === 0
                     ? <option value="">No speaker found</option>
-                    : outputs.map(o => <option key={o.deviceId} value={o.deviceId}>{o.label}</option>)}
+                    : CATEGORY_ORDER
+                        .map(cat => ({ cat, items: outputs.filter(o => o.deviceType === cat) }))
+                        .filter(g => g.items.length > 0)
+                        .map(g => (
+                          <optgroup key={g.cat} label={g.cat}>
+                            {g.items.map(o => (
+                              <option key={o.deviceId} value={o.deviceId}>{o.displayLabel || o.label}</option>
+                            ))}
+                          </optgroup>
+                        ))}
                 </select>
               </div>
             </div>
