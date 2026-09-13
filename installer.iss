@@ -2,7 +2,7 @@
 ; Bundles: SECTalk.exe launcher, Node.js portable, backend + built frontend
 
 #define MyAppName "SECTalk"
-#define MyAppVersion "1.0.12"
+#define MyAppVersion "1.0.13"
 #define MyAppPublisher "SECTalk"
 #define MyAppExeName "SECTalk.exe"
 

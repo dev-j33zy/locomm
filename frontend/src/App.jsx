@@ -17,6 +17,14 @@ const getContrastYIQ = (hexcolor) => {
 // real physical units (speakers, mics, Bluetooth headsets by device name).
 const PSEUDO_DEVICE_IDS = new Set(['default', 'communications']);
 
+// Synthetic choice used only when the platform cannot enumerate speakers at
+// all (mobile browsers: Android Chrome/WebView + iOS Safari). On phones the OS
+// routes playback to whatever is attached — loudspeaker, wired earphones or
+// Bluetooth — so we represent that as a single "system speakers" entry instead
+// of an empty dropdown.
+const SYSTEM_OUTPUT_ID = 'sectalk-system-output';
+const SYSTEM_OUTPUT_LABEL = 'Device speaker (system — loudspeaker, earphone, or Bluetooth)';
+
 // Normalize a device name so the same unit reads identically in both the input
 // and output dropdowns (Chrome prefixes some entries with "Default - ").
 const cleanDeviceLabel = (label, kind) => {
@@ -44,6 +52,22 @@ const buildDeviceList = (devices, kind) => {
   const list = [...seen.values()];
   list.sort((a, b) => a.label.localeCompare(b.label));
   return list;
+};
+
+// Output devices are only enumerable on desktop. If the platform reports no
+// real speakers (typical on phones), fall back to a single "system speakers"
+// option so playback and the UI still work — the OS handles routing to
+// loudspeaker, wired earphones or Bluetooth automatically.
+const buildOutputDeviceList = (devices) => {
+  const hasRealOutputs = (devices || []).some(
+    d => d.kind === 'audiooutput' && !PSEUDO_DEVICE_IDS.has(d.deviceId));
+  if (hasRealOutputs) return buildDeviceList(devices, 'audiooutput');
+  return [{
+    deviceId: SYSTEM_OUTPUT_ID,
+    label: SYSTEM_OUTPUT_LABEL,
+    groupId: '',
+    kind: 'audiooutput'
+  }];
 };
 
 // Bluetooth headsets expose their mic + speaker under the same groupId, so a
@@ -283,7 +307,7 @@ export default function App() {
         const devices = await navigator.mediaDevices.enumerateDevices();
         if (!mounted) return;
         const insList = buildDeviceList(devices, 'audioinput');
-        const outsList = buildDeviceList(devices, 'audiooutput');
+        const outsList = buildOutputDeviceList(devices);
         setInputs(insList);
         setOutputs(outsList);
         setSelectedInput(prev =>
@@ -341,7 +365,8 @@ export default function App() {
     try {
       if (!playContextRef.current) {
         playContextRef.current = new (window.AudioContext || window.webkitAudioContext)();
-        if (selectedOutput && typeof playContextRef.current.setSinkId === 'function') {
+        if (selectedOutput && selectedOutput !== SYSTEM_OUTPUT_ID
+            && typeof playContextRef.current.setSinkId === 'function') {
            await playContextRef.current.setSinkId(selectedOutput).catch(e => console.error(e));
         }
       }
@@ -377,7 +402,8 @@ export default function App() {
   // Re-apply the output device to the live playback context when it changes mid-session
   useEffect(() => {
     const ctx = playContextRef.current;
-    if (ctx && selectedOutput && typeof ctx.setSinkId === 'function') {
+    if (ctx && selectedOutput && selectedOutput !== SYSTEM_OUTPUT_ID
+        && typeof ctx.setSinkId === 'function') {
       ctx.setSinkId(selectedOutput).catch(e => console.error(e));
     }
   }, [selectedOutput]);
