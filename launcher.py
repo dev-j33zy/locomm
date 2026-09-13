@@ -108,7 +108,7 @@ class SECTalkLauncher(tk.Tk):
 
         # App icon (launcher + taskbar). Falls back to default when not found.
         try:
-            self.iconbitmap("SECTalk.ico")
+            self.iconbitmap(resource_path("SECTalk.ico"))
         except tk.TclError:
             try:
                 self.iconbitmap(default="")

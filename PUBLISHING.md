@@ -61,7 +61,7 @@ npm run build
 ### Step 2: Build the Launcher .exe
 
 ```bash
-pyinstaller --onefile --windowed --name "SECTalk" --clean launcher.py
+pyinstaller --onefile --windowed --name "SECTalk" --icon SECTalk.ico --clean launcher.py
 move dist\SECTalk.exe .\SECTalk.exe
 rmdir /s /q build dist
 del SECTalk.spec
@@ -123,7 +123,7 @@ For each new version:
 cd frontend && npm run build
 
 # 3. Rebuild launcher
-pyinstaller --onefile --windowed --name "SECTalk" --clean launcher.py
+pyinstaller --onefile --windowed --name "SECTalk" --icon SECTalk.ico --clean launcher.py
 
 # 4. Download portable Node.js (if not cached)
 # 5. Compile installer
